@@ -1,0 +1,1842 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Web Radio 5800</title>
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-title" content="ラジオ">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json?v=56">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png?v=56">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    height: 100%; background: #0d0c0b; overflow: hidden;
+    overscroll-behavior: none; touch-action: manipulation;
+    -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    font-family: "Helvetica Neue", Arial, sans-serif; color: #e8e8e8;
+  }
+  body {
+    position: fixed; inset: 0; display: flex; justify-content: center; align-items: center;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+  }
+
+  /* 全体の大きさは em で決める。幅40em が画面に収まるように文字サイズを決める */
+  .radio {
+    font-size: min(2.5vw, 1.75dvh, 13px);
+    width: 40em; height: calc(100% - 1.1em); max-height: 60em; margin-top: 1.1em;   /* 上にアンテナの先が出る分あける */   /* 縦に長い画面（ホーム画面から開いたとき）でも形を崩さない。余りは上下に黒 */
+    position: relative; display: flex; flex-direction: column;
+    background:
+      repeating-linear-gradient(90deg, rgba(255,255,255,.012) 0 1px, transparent 1px 3px),
+      linear-gradient(#1b1b1b, #121212);
+    border-radius: .5em;
+    padding: 1.4em 1.6em .4em;
+  }
+  /* 左右と上のクロームの縁 */
+  .radio::before, .radio::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 1em;
+    background: linear-gradient(90deg, #777, #eee 35%, #aaa 60%, #555);
+    border-radius: .3em;
+  }
+  .radio::before { left: 0; }
+  .radio::after { right: 0; }
+  /* 上の枠の左寄りに出ているアンテナの先（たたんだロッドアンテナの銀色の頭。実機どおり） */
+  .antenna { position: absolute; left: 3.3em; top: -.75em; width: 2.5em; height: .85em; z-index: 3; pointer-events: none; clip-path: inset(-100em -100em .32em -100em); }   /* 本体の中に沈んだ部分は見せない */
+  /* たたんだロッドの先：ロッドと同じくらいの太さの円筒が、上の枠から少しだけ出ている（リベットのような台座はなし） */
+  .antenna .tip {
+    position: absolute; left: .3em; right: .3em; top: -.2em; bottom: 0; border-radius: .08em .08em 0 0;   /* 押しボタン：ロッドより 1 割ほど小さい */
+    background: var(--chrome);
+    box-shadow: 0 -.05em .1em rgba(0,0,0,.6);
+  }
+  .antenna .collar { display: none; }
+  /* 根元の薄いリング：本体の上に付いている金属の輪。真横から見ると台形（実機写真） */
+  .antenna .antring { position: absolute; left: 50%; bottom: .32em; width: 4em; margin-left: -2em; height: .42em; z-index: 4;
+    background: linear-gradient(90deg, #3a3a3a, #9a9a9a 18%, #e8e8e8 34%, #8a8a8a 52%, #4a4a4a 70%, #b0b0b0 86%, #555);
+    clip-path: polygon(0 100%, 100% 100%, 90% 0, 10% 0); }
+  /* アンテナの頭を押すと：上へ飛び出し（段々の太い根元が見える）→ 右へ倒れ → 長く伸びる。もう一度押すと逆の順でしまう */
+  .radio { transition: margin-top .45s ease, height .45s ease; }
+  .radio.ant-out { margin-top: 5em; height: calc(100% - 5em); }   /* 伸ばしたアンテナが画面に入るよう、本体を少し下げる */
+  .anthit { position: absolute; left: 2.6em; top: -1.6em; width: 3.9em; height: 2.6em; z-index: 4; cursor: pointer; }
+  /* 根元の柱（太い筒）がまっすぐ飛び出し、その上の継ぎ手からロッドが右へ倒れて伸びる */
+  /* 柱とロッドは光沢のあるクロームメッキ：明るい映り込みと暗い映り込みがくっきり交互に */
+  .antenna { --chrome: linear-gradient(90deg, #2c2c2c 0%, #8c8c8c 10%, #ffffff 22%, #e6e6e6 28%, #7a7a7a 40%, #262626 52%, #5a5a5a 62%, #d8d8d8 76%, #ffffff 82%, #9a9a9a 92%, #3a3a3a 100%); }
+  .antenna .basecol { position: absolute; left: 50%; bottom: -.3em; width: 3.17em; margin-left: -1.585em; height: 0; transition: height .3s ease-out; }
+  .antenna .basecol::before { content: ""; position: absolute; inset: 0; overflow: hidden; z-index: 2;   /* くびれの根元は柱の中に隠れる */
+    background: var(--chrome);
+    left: 10%; right: 10%; border-radius: 1.2em 1.2em 0 0 / 1em 1em 0 0; }   /* 飛び出す柱は段のない 1 本の筒。先は丸い（下は本体の中に隠れる） */
+  .antenna .knuckle { position: absolute; left: 50%; bottom: -.6em; width: 1.12em; height: 2.1em; margin-left: -.56em; border-radius: .35em; z-index: -1;   /* 継ぎ手：細くくびれ、ロッドと一緒に傾く（実機写真） */
+    background: var(--chrome); opacity: 0; transition: opacity .1s; }
+  .antenna .rodwrap { position: absolute; z-index: 1; left: 50%; bottom: calc(100% - 1.65em); width: 2.32em; margin-left: -1.16em; height: 0; transform-origin: 50% 100%; clip-path: inset(0 -1em -2em -1em);   /* しまうと柱の中へ沈む。下へは柱の中までだけはみ出せる */
+    transition: height .25s ease-out, transform .7s ease-in-out, bottom .3s ease-out; }
+  /* ロッドは円筒。つなぎ目ごとにほんの少しずつ細くなる（先でも根元の 7 割） */
+  /* ロッド：根元の 1 段目だけ太くて長い。その先は細い段が少しずつ細くなって続き、つなぎ目に小さな輪（実機写真） */
+  .antenna .rodbody { position: absolute; inset: 2.05em 0 1.4em; display: flex; flex-direction: column; align-items: center; }
+  .antenna .rodbody i { position: relative; flex: 1 1 0; background: var(--chrome); }
+  .antenna .rodbody i:nth-child(1) { width: 32.0%; flex-grow: 2.2; }   /* 11 段目（いちばん細い段）だけ少し長い */
+  .antenna .rodbody i:nth-child(2) { width: 38.8%; }
+  .antenna .rodbody i:nth-child(3) { width: 45.6%; }
+  .antenna .rodbody i:nth-child(4) { width: 52.4%; }
+  .antenna .rodbody i:nth-child(5) { width: 59.2%; }
+  .antenna .rodbody i:nth-child(6) { width: 66.0%; }
+  .antenna .rodbody i:nth-child(7) { width: 72.8%; }
+  .antenna .rodbody i:nth-child(8) { width: 79.6%; }
+  .antenna .rodbody i:nth-child(9) { width: 86.4%; }
+  .antenna .rodbody i:nth-child(10) { width: 93.2%; }
+  .antenna .rodbody i:nth-child(11) { width: 100%; flex-grow: 46.6; }   /* 全部で 11 段：1 段目（根元）は約 25em。先へ 1 段ごとに 6.8% ずつなめらかに細くなり、11 段目は 32% */
+  .antenna .rodbody i + i::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: .12em; background: rgba(0,0,0,.35); }   /* つなぎ目は出っ張らない細い線だけ */
+  .antenna .rodwrap::after { content: ""; position: absolute; left: -6%; right: -6%; bottom: 1.4em; height: .45em; border-radius: .15em;   /* ロッドの根元の輪 */
+    background: var(--chrome); box-shadow: 0 -.06em 0 rgba(0,0,0,.5), 0 .06em 0 rgba(0,0,0,.5); opacity: 0; transition: opacity .1s; }
+  /* ロッドの先：円筒で、上がほんの少しだけ細い。根元に継ぎ目の線（実機写真） */
+  .antenna .rodtip { position: absolute; left: 0; right: 0; top: 0; height: 2.25em; border-radius: .06em .06em 0 0;   /* 先は 1 段目と同じ太さの円筒（たたんだとき上に出ている頭も同じ太さ） */
+    background: linear-gradient(transparent calc(100% - .14em), rgba(0,0,0,.3) calc(100% - .14em) calc(100% - .06em), transparent calc(100% - .06em)), var(--chrome);
+    clip-path: polygon(0 100%, 100% 100%, 97% 0, 3% 0); }
+  /* ext＝ロッドが上へ伸びる、base＝台座の柱が最後に出る、tilt＝右へ倒れる */
+  .antenna.base .basecol { height: 2.9em; }
+  .antenna.base .rodwrap { bottom: calc(100% - .55em); }   /* くびれ（接続部）も台座と一緒に最後に出る */
+  .antenna.ext .knuckle, .antenna.ext .rodwrap::after { opacity: 1; }   /* しまっているときは見せない */
+  .antenna .tip, .antenna .collar { z-index: 5; }
+  .antenna .tip { transition: transform .08s ease-in; }
+  .antenna.press .tip { transform: translateY(.36em); }   /* 押すと一瞬半分くらい沈む */   /* 押しボタン（銀色の頭）は出したときも隠さない。柱はその後ろから出る */
+  .antenna.tilt .rodwrap { transform: rotate(82deg); }
+  .antenna.ext .rodwrap { height: 34.2em; transition: height .8s ease-out, transform .7s ease-in-out, bottom .3s ease-out; }
+  /* 上のアルミの枠の上に、ごく薄い黒いプラスチックの層（実機） */
+  .rim::before { content: ""; position: absolute; left: 0; right: 0; top: -.22em; height: .22em; border-radius: .08em .08em 0 0;
+    background: linear-gradient(#3a3a3a, #141414 40%, #050505); }
+  .rim { position: absolute; left: 1em; right: 1em; top: 0; height: .7em; background: linear-gradient(#f4f4f4, #bbb 45%, #777); border-bottom: .1em solid #333; }
+
+  .label { font-size: 1em; letter-spacing: .04em; color: #ececec; font-weight: 600; text-align: center; line-height: 1.2; }
+  .small { font-size: .78em; }
+  .panel { background: #181818; border: .12em solid #3b3b3b; border-radius: .35em; box-shadow: inset 0 0 .4em #000; }
+
+  .top { display: grid; grid-template-columns: 9.6em 15.4em 10.4em; gap: .6em; margin-top: .4em; position: relative; z-index: 2; }
+  .col { display: flex; flex-direction: column; gap: .6em; }
+  .col > .vol { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+  .col > .bfo { flex: 1; align-content: center; }   /* 右列：BAND SELECT を詰めた分は BFO の枠を高くして埋める */
+  .band { flex: none; }
+
+  /* トグルスイッチ */
+  .switches { display: grid; grid-template-columns: 1fr 1fr; gap: .5em; }
+  .sw { display: flex; flex-direction: column; align-items: center; padding: .5em 0 .4em; gap: .25em; cursor: pointer; touch-action: none; }
+  .slot { width: 2.2em; height: 3.3em; background: #050505; border-radius: .65em; border: .12em solid #333; position: relative; box-shadow: inset 0 .2em .4em #000; }
+  /* 実機と同じ倒れるレバー（POWER の実機写真に合わせた形を全スイッチ共通に）：
+     上の時は手前に水平に起きた白い角丸の四角、下の時は支点から下へ伸びる軸の先に手前を向いた四角い面 */
+  .cap {
+    position: absolute; left: .25em; right: .25em; height: 1.26em; border-radius: .45em;
+    background: linear-gradient(#fff, #c9c9c9 60%, #9a9a9a); top: .25em;
+    box-shadow: 0 .2em .3em #000;
+  }
+  .sw.off .cap { left: .4em; right: .4em; top: 22%; height: auto; bottom: .14em; border-radius: .5em .5em .2em .2em; box-shadow: none;
+    background: linear-gradient(rgba(0,0,0,.45), transparent 35%), linear-gradient(90deg, #7a7a7a, #dcdcdc 30%, #f4f4f4 45%, #cfcfcf 70%, #6e6e6e); }
+  .sw.off .cap::before {
+    content: ""; position: absolute; left: -.12em; right: -.12em; bottom: 0; height: 1em; border-radius: .3em;
+    background: linear-gradient(transparent 35%, rgba(0,0,0,.42)), radial-gradient(circle at 45% 40%, #ffffff, #e2e2e2 55%, #bdbdbd 85%, #959595);
+    box-shadow: 0 -.08em .15em rgba(0,0,0,.45), inset 0 0 .08em rgba(0,0,0,.35);
+  }
+  /* POWER の先端は白っぽい桃色（実機写真） */
+  .sw.off .cap.red::before { background: linear-gradient(transparent 35%, rgba(0,0,0,.42)), radial-gradient(circle at 45% 40%, #fff3f3, #f0d2d2 55%, #d9aaaa 85%, #b98585); }
+  /* レバーの頭の丸い塗装：POWER は赤、ほかは灰色。下の時は先端の面の真ん中に横長の楕円 */
+  .cap::after {
+    content: ""; position: absolute; left: 50%; top: 50%; width: .74em; height: .74em; margin: -.37em 0 0 -.37em;
+    border-radius: 50%; background: radial-gradient(circle at 40% 35%, #a8a8a8, #7a7a7a 60%, #4a4a4a);
+    box-shadow: inset 0 0 .1em rgba(0,0,0,.5);
+  }
+  .cap.red::after { background: radial-gradient(circle at 40% 35%, #ff7a6a, #d8261a 60%, #8f1208); }
+  .sw.off .cap::after { top: auto; bottom: .5em; width: .82em; height: .58em; margin: 0 0 -.29em -.41em; z-index: 1; }
+  .sw .label { font-size: .85em; }
+
+  /* つまみ */
+  .knob-wrap { position: relative; margin: 0 auto; touch-action: none; cursor: grab; }
+  .knob {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle at 50% 40%, #4a4a4a, #2e2e2e 70%, #1e1e1e);
+    box-shadow: 0 .4em .7em #000;
+  }
+  /* 上面：実機どおり艶消しの灰色 */
+  .knob .cap2 {
+    position: absolute; inset: 7%; border-radius: 50%;
+    background: radial-gradient(circle at 40% 30%, #8a8a8a, #5e5e5e 55%, #424242);
+    box-shadow: 0 .1em .2em rgba(0,0,0,.6);
+  }
+  .knob .mark { position: absolute; left: 50%; top: 8%; width: .2em; height: 18%; margin-left: -.1em; background: #2a2a2a; border-radius: .1em; }
+
+  /* VOLUME は実機どおり、濃い灰色の丸い土台の上に、明るい灰色の頭が載る。頭は涙形で、とがった先が目盛りを指す */
+  .vol .knob, .tone .knob { background: none; box-shadow: none; }
+  .vol .knob::before {
+    content: ""; position: absolute; inset: 8%; border-radius: 50%; z-index: -1;
+    background: radial-gradient(circle at 45% 40%, #888, #767676 60%, #646464);
+    box-shadow: 0 .35em .6em #000;
+  }
+  /* つまみが回っても光と影の向きは変えない（土台と頭は逆に回して打ち消し、溝だけつまみと一緒に回す） */
+  .vol .knob::before, .vol .knob .cap2, .tone .knob .cap2 { transform: rotate(calc(var(--r, 0deg) * -1)); }
+  .vol .knob .cap2::before, .tone .knob .cap2::before { transform: rotate(var(--r, 0deg)); }
+  .vol .knob .cap2, .tone .knob .cap2 {
+    inset: 15%; border-radius: 50%; z-index: 1;
+    /* 頭の内側に丸い溝（実機どおり） */
+    background:
+      radial-gradient(circle closest-side, transparent 0 68%, rgba(0,0,0,.5) 71%, rgba(255,255,255,.28) 75%, transparent 79%),
+      radial-gradient(circle at 45% 40%, #b0b0b0, #8e8e8e 60%, #727272);
+    box-shadow: 0 .12em .3em rgba(0,0,0,.6);
+  }
+  /* 頭の側面の滑り止め：3時と9時のあたりに太い縦溝を4本ずつ（実機どおり）。縁も溝の所だけ欠ける */
+  .vol .knob .cap2::before, .tone .knob .cap2::before {
+    content: ""; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(transparent 0, transparent 71deg, rgba(255,255,255,.22) 72deg, rgba(0,0,0,.6) 74.5deg 77deg, transparent 78.5deg, transparent 81deg, rgba(255,255,255,.22) 82deg, rgba(0,0,0,.6) 84.5deg 87deg, transparent 88.5deg, transparent 91deg, rgba(255,255,255,.22) 92deg, rgba(0,0,0,.6) 94.5deg 97deg, transparent 98.5deg, transparent 101deg, rgba(255,255,255,.22) 102deg, rgba(0,0,0,.6) 104.5deg 107deg, transparent 108.5deg, transparent 251deg, rgba(255,255,255,.22) 252deg, rgba(0,0,0,.6) 254.5deg 257deg, transparent 258.5deg, transparent 261deg, rgba(255,255,255,.22) 262deg, rgba(0,0,0,.6) 264.5deg 267deg, transparent 268.5deg, transparent 271deg, rgba(255,255,255,.22) 272deg, rgba(0,0,0,.6) 274.5deg 277deg, transparent 278.5deg, transparent 281deg, rgba(255,255,255,.22) 282deg, rgba(0,0,0,.6) 284.5deg 287deg, transparent 288.5deg, transparent 360deg);
+    -webkit-mask: radial-gradient(closest-side, transparent 72%, #000 76%);
+    mask: radial-gradient(closest-side, transparent 72%, #000 76%);
+  }
+  /* VOLUME・TONE は頭の側面（いちばん外の縁）だけを浅くへこませる */
+  .vol .knob .cap2::before, .tone .knob .cap2::before {
+    background: conic-gradient(transparent 0deg, transparent 70.5deg, rgba(0,0,0,.4) 72.5deg, rgba(0,0,0,.15) 75deg, rgba(255,255,255,.2) 77.5deg, transparent 79.5deg, transparent 80.5deg, rgba(0,0,0,.4) 82.5deg, rgba(0,0,0,.15) 85deg, rgba(255,255,255,.2) 87.5deg, transparent 89.5deg, transparent 90.5deg, rgba(0,0,0,.4) 92.5deg, rgba(0,0,0,.15) 95deg, rgba(255,255,255,.2) 97.5deg, transparent 99.5deg, transparent 100.5deg, rgba(0,0,0,.4) 102.5deg, rgba(0,0,0,.15) 105deg, rgba(255,255,255,.2) 107.5deg, transparent 109.5deg, transparent 250.5deg, rgba(255,255,255,.2) 252.5deg, rgba(0,0,0,.15) 255deg, rgba(0,0,0,.4) 257.5deg, transparent 259.5deg, transparent 260.5deg, rgba(255,255,255,.2) 262.5deg, rgba(0,0,0,.15) 265deg, rgba(0,0,0,.4) 267.5deg, transparent 269.5deg, transparent 270.5deg, rgba(255,255,255,.2) 272.5deg, rgba(0,0,0,.15) 275deg, rgba(0,0,0,.4) 277.5deg, transparent 279.5deg, transparent 280.5deg, rgba(255,255,255,.2) 282.5deg, rgba(0,0,0,.15) 285deg, rgba(0,0,0,.4) 287.5deg, transparent 289.5deg, transparent 360deg);
+    -webkit-mask: radial-gradient(closest-side, transparent 84%, #000 91%);
+    mask: radial-gradient(closest-side, transparent 84%, #000 91%);
+  }
+  /* 指針：頭から縁へ細くとがって伸びる（頭の下に敷いて、頭とひと続きに見せる） */
+  .vol .knob .mark, .tone .knob .mark {
+    top: 8.5%; width: 40%; height: 30%; margin-left: -20%; border-radius: 0;
+    background: linear-gradient(90deg, #7a7a7a, #a6a6a6 50%, #727272);
+    clip-path: polygon(42% 16%, 45.8% 8.5%, 48.2% 4.6%, 50% 3.6%, 51.8% 4.6%, 54.2% 8.5%, 58% 16%, 100% 100%, 0 100%);
+  }
+  /* TONE は VOLUME と同じ形の頭だけ（土台なし）。実機どおり */
+  .tone .knob .cap2 { inset: 12%; box-shadow: 0 .15em .35em rgba(0,0,0,.75); }
+  .tone .knob .mark { top: 0; height: 32%; width: 52%; margin-left: -26%; }
+  .vol .knob .mark { top: 5%; height: 34%; width: 48%; margin-left: -24%; }   /* VOLUME の指針は少し大きく */
+  .vol { padding: .05em .3em .1em; }
+  .vol .knob-wrap { width: 7.6em; height: 7.6em; margin-top: 0; }   /* TONE の枠を上へ広げた分、上下を詰める */
+  .vol .ticks { inset: -.6em; }
+  .vol > .label { text-align: left; padding-left: .35em; font-size: .85em; }
+  .ticks { position: absolute; inset: -0.8em; pointer-events: none; }
+  .minmax { display: flex; justify-content: space-between; padding: .1em .4em 0; }
+  .tone { padding: .95em .2em 1.16em; }   /* 上の線を BAND SELECT の上の線と同じ高さに */
+  .tone .row { display: flex; justify-content: space-around; margin-top: .6em; }
+  .tone .knob-wrap { width: 3.9em; height: 3.9em; }
+  .tone .ticks { inset: -.45em; }
+  /* TONE も実機どおり、つまみの下に MIN／MAX */
+  .tone .tk { width: 4em; }
+  .tone .minmax { padding: .6em 0 0; font-size: .78em; }
+  /* 実機どおり：BASS ┌─ TONE ─┐ TREBLE を横一列に。横線の両端はつまみの方へ下へ折れる */
+  .tone .head { position: relative; height: 1.5em; margin-top: .5em; }
+  .tone .head::before { content: ""; position: absolute; left: calc(25% - .05em); right: calc(25% - .05em); top: .55em; bottom: 0; border: .1em solid #ccc; border-bottom: none; }
+  .tone .head .label { position: absolute; top: 40%; transform: translateY(-50%); line-height: 1; }   /* 横線（上から .6em ＝ 高さの 40%）の高さに文字の真ん中をそろえる */
+  .tone .head .ht { left: 50%; transform: translate(-50%, -50%); padding: 0 .3em; background: #181818; }
+  .tone .head .hb, .tone .head .htr { font-size: .608em; letter-spacing: 0; }   /* MIN・MAX と同じ大きさ */
+  .tone .head .hb { right: calc(75% + .3em); }
+  .tone .head .htr { left: calc(75% + .3em); letter-spacing: -.04em; }
+
+  /* 選局窓 */
+  .window {
+    height: 14.6em; border: .5em solid #0b0b0b; border-radius: .3em;
+    outline: .12em solid #444; background: #333; position: relative; overflow: hidden;
+  }
+  .window canvas { display: block; width: 100%; height: 100%; }
+  .bands { display: grid; grid-template-columns: repeat(5, 1fr); text-align: center; padding: 0 .3em; }
+  .bands div { cursor: pointer; }
+  .led { width: 1.6em; height: 1.6em; margin: .25em auto 0; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #333, #0a0a0a); box-shadow: inset 0 0 .2em #000; }
+  /* 実機の BAND 表示はランプではなく、窓の奥の板が緑に変わる機械式。光らせない（艶消しの緑、窓の縁の影だけ） */
+  .led.on { background: radial-gradient(circle closest-side, #4f8a3e 0, #3c7330 42%, rgba(0,0,0,.6) 47%, transparent 52%), radial-gradient(circle at 40% 35%, #333, #0a0a0a); }
+
+  .tune-area { position: relative; height: 9.6em; }
+  /* TUNING SPEED：アーチの頂上の小さなつまみ。SLOW と FAST の文字から線が降りてくる */
+  .speed { position: absolute; left: 0; right: 0; top: 0; height: 2.6em; z-index: 4; cursor: pointer; text-align: center; }
+  .speed .row { display: flex; align-items: flex-start; justify-content: center; margin-top: .25em; }
+  .speed .row .label { margin-top: -.4em; }   /* SLOW／FAST は線とともに少し上 */
+  .speed .br { width: 2.3em; height: .7em; border-top: .1em solid #ddd; margin-top: .05em; }   /* 文字を左右へ離す。縦の線は短め */
+  .speed .br { position: relative; }
+  .speed .br.l { margin-right: .2em; }
+  .speed .br.r { margin-left: .2em; }
+  /* 縦の部分はつまみの中心を向くように少し傾ける */
+  .speed .br::after { content: ''; position: absolute; top: -.1em; width: .1em; height: calc(100% + .1em); background: #ddd; transform-origin: 50% 0; }
+  .speed .br.l::after { right: -.1em; transform: rotate(-10deg); }
+  .speed .br.r::after { left: -.1em; transform: rotate(10deg); }
+  .speed .sw2 { position: relative; width: 2em; height: 1.5em; margin-top: .6em; }
+  .speed .dot {
+    position: absolute; top: .15em; left: -.75em; width: 1.6em; height: 1.6em; border-radius: 50%;   /* 中心の位置は変えずに少し大きく */
+    /* 実機どおり、銀色の輪で中央は黒い */
+    background:
+      radial-gradient(circle, #0a0a0a 0 50%, #333 54%, transparent 56%),   /* 銀の輪は薄め */
+      radial-gradient(circle at 40% 30%, #fff, #c8c8c8 45%, #8a8a8a 75%, #555);
+    border: .12em solid #111; transition: left .15s;
+  }
+  .speed.fast .dot { left: 1.15em; }   /* 左右とも少し内側で止まる */   /* FAST の線の真下 */   /* SLOW／FAST の線の真下で止まる */
+  /* つまみの上のアーチ（つまみを囲む黒い覆い） */
+  .arch {
+    position: absolute; left: 50%; top: 1.7em; width: 14.6em; height: 14.6em; margin-left: -7.3em; border-radius: 50%; z-index: 2;
+    background: radial-gradient(circle closest-side, #000 78%, #161616 80%, #1c1c1c 95%, #2a2a2a 99%, transparent 100%);   /* 覆いの左右はボディと同じ色 */
+    box-shadow: inset 0 .15em 0 #555;
+    clip-path: inset(0 0 46% 0);
+  }
+  /* SLOW／FAST のつまみが動く頂上の部分だけ黒い */
+  .arch::after {
+    content: ''; position: absolute; inset: 0; border-radius: 50%;
+    background: conic-gradient(from -22deg, #050505 0 44deg, transparent 44deg 360deg);
+    -webkit-mask: radial-gradient(circle closest-side, transparent 78%, #000 78.5%, #000 99.5%, transparent 100%); mask: radial-gradient(circle closest-side, transparent 78%, #000 78.5%, #000 99.5%, transparent 100%);
+  }
+  .tuning { position: absolute; left: 50%; top: 3.2em; width: 11.6em; height: 11.6em; margin-left: -5.8em; z-index: 3; }
+  .tuning .ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: radial-gradient(circle at 45% 35%, #2a2a2a, #141414 60%, #0a0a0a);
+    box-shadow: 0 .6em 1em #000, 0 0 0 .3em #111;
+  }
+  /* 回るのは黒い面と指を入れるくぼみだけ */
+  .tuning .face {
+    position: absolute; inset: 7%; border-radius: 50%;
+    background: radial-gradient(circle at 45% 35%, #333, #121212 70%);
+  }
+  .tuning .dimple {
+    position: absolute; width: 36%; height: 36%; left: 12%; top: 46%; border-radius: 50%;
+    background: radial-gradient(circle at 60% 65%, #2a2a2a, #050505 70%);
+    box-shadow: inset .2em .3em .5em #000, 0 0 0 .15em #2e2e2e;
+  }
+  /* 銀色の輪は光の映り込みなので回らない。実機どおり細い */
+  .tuning .shine {
+    position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background: conic-gradient(from 210deg, #f2f2f2, #777 20%, #bbb 35%, #3a3a3a 55%, #555 70%, #d8d8d8 88%, #f2f2f2);
+    -webkit-mask: radial-gradient(closest-side, transparent 93.2%, #000 94%, #000 97%, transparent 99%);
+    mask: radial-gradient(closest-side, transparent 93.2%, #000 94%, #000 97%, transparent 99%);
+  }
+
+  /* メーター */
+  .meter { padding: .5em .5em .3em; text-align: center; }
+  .meter svg { width: 100%; display: block; border-radius: .2em; }
+  /* 実機写真：TUNING METER の文字の下に「←─(D)─→」の印、その下に枠なし 1 行の銘「FM/AM 5BAND RECEIVER ICF-5800」 */
+  .model { text-align: center; margin-top: -.35em; padding: 0 0 .3em; }   /* 印は TUNING METER の枠のすぐ下 */
+  .model svg { display: block; width: 50%; height: .8em; margin: 0 auto .45em; }
+  .model span { display: block; white-space: nowrap; font-weight: 800; font-size: .74em; letter-spacing: .02em; line-height: 1.15; }
+  .bfo { display: grid; grid-template-columns: 1fr 2.6em 1fr; align-items: start; padding: .4em .2em; }
+  .bfo .sw { padding: 0; }
+  .setbtn { margin-top: 1.4em; cursor: pointer; text-align: center; }
+  .setbtn .badge { display: inline-block; background: linear-gradient(#ff9a3d, #d86410); color: #fff; font-weight: 800; font-size: .75em; padding: .35em .25em; border: .15em solid #eee; line-height: 1; }
+  .band { position: relative; height: 9.99em; padding: .3em; }
+  .band .knob-wrap { position: absolute; width: 4.7em; height: 4.7em; left: 3.25em; top: 2.74em; }
+  /* BAND のつまみの色は VOLUME に合わせる（土台・頭とも同じ灰色） */
+  .band .knob { background: radial-gradient(circle at 45% 40%, #888, #767676 60%, #646464); }
+  .band .knob .cap2 { background: radial-gradient(circle at 45% 40%, #b0b0b0, #8e8e8e 60%, #727272); }
+  /* BAND のつまみは実機どおり、つまみを横切る棒。指す側（上）は少しとがって縁から少し出るだけ、反対側（下）は大きく飛び出す */
+  .band .lever {
+    position: absolute; left: 50%; top: calc(50% - 2.35em); width: .85em; height: 5.8em; margin-left: -.425em; transform-origin: 50% 2.35em;   /* とがった先は少し短め（2.65→2.35em） */
+    background: linear-gradient(90deg, #727272, #b0b0b0 40%, #8e8e8e 65%, #646464);
+    clip-path: polygon(50% 0, 100% 10%, 100% 97%, 94% 100%, 6% 100%, 0 97%, 0 10%);
+    filter: drop-shadow(0 .25em .35em rgba(0,0,0,.75));
+  }
+  .band .btick { position: absolute; width: .14em; height: .45em; background: #ddd; border-radius: .05em; }
+  .band .blabel { position: absolute; z-index: 1; font-size: .78em; font-weight: 700; transform: translate(-50%, -50%); cursor: pointer; }
+  .band .title { position: absolute; left: .4em; bottom: .3em; text-align: left; font-size: .8em; }
+  .band .ssl { position: absolute; right: .5em; bottom: .5em; border: .12em solid #ccc; font-size: .7em; padding: .1em .2em; font-weight: 700; }
+
+  /* 下半分 */
+  /* 中央の横のクローム線：細く、左右の縁とは切れ目を空ける（実機どおり） */
+  .bar { height: .55em; margin: .5em 0 0; background: linear-gradient(#fafafa, #9a9a9a 60%, #666); position: relative; z-index: 1; }
+  .lower { flex: 1; position: relative; margin-top: .5em; min-height: 12em; }
+  /* 穴は実機どおり段違い（1列ごとに半分ずらす）に並べる。間隔 1.22em、穴の直径はその約 2/3 */
+  .grille {
+    position: absolute; inset: 0; border: .15em solid #333; border-radius: .3em; container-type: size;
+    --hole: radial-gradient(circle, #121212 .38em, rgba(0,0,0,.6) .42em, transparent .47em);
+    background:
+      var(--hole) .5em 0 / 1.22em 2.113em,
+      var(--hole) 1.11em 1.057em / 1.22em 2.113em,
+      linear-gradient(#2c2c2c, #222);
+  }
+  /* 裏にスピーカーがある所だけ、穴の奥が黒く見える（実機の写真どおり。板の色は変えず、穴の色だけ濃くする） */
+  .grille::before {
+    content: ""; position: absolute; inset: 0; pointer-events: none;
+    --hole: radial-gradient(circle, #000 .38em, transparent .4em);
+    background:
+      var(--hole) .5em 0 / 1.22em 2.113em,
+      var(--hole) 1.11em 1.057em / 1.22em 2.113em;
+    -webkit-mask-image: radial-gradient(circle 31cqw at 43% 58%, #000 92%, transparent 100%);
+    mask-image: radial-gradient(circle 31cqw at 43% 58%, #000 92%, transparent 100%);
+  }
+  /* TIME SET ON/OFF：実機のゼンマイ式タイマー（最大 2 時間）。前面の窓にドラム、右の横にゼンマイを巻くノブ */
+  .timer {
+    position: absolute; right: 1.2em; top: 1.8em; width: 15em; padding: .45em .8em;
+    background: #141414; border: .15em solid #4a4a4a; display: flex; align-items: center; gap: .6em;
+  }
+  .timer .txt { flex: 1; min-width: 0; font-size: .9em; font-weight: 700; padding-left: .8em; white-space: nowrap; }
+  .timer .onoff { position: relative; padding-bottom: .25em; }
+  .timer .onoff::after { content: ""; position: absolute; left: -.2em; right: .1em; bottom: 0; height: .1em; background: #ddd; }
+  .timer .onoff::before { content: ""; position: absolute; right: -.15em; bottom: -.2em; border: .25em solid transparent; border-left: .45em solid #ddd; border-right: 0; }
+  .timer .drumwin { flex: none; position: relative; width: 2.1em; height: 2.3em; border: .15em solid #2a2a2a; border-radius: .15em; background: #050505; box-shadow: inset 0 .15em .3em #000; overflow: hidden; touch-action: none; cursor: ns-resize; }
+  .timer .drum { position: absolute; left: 0; right: 0; top: 0; }
+  .timer .drum div { height: 1.1em; line-height: 1.1em; text-align: right; padding-right: .25em; font: 700 .95em/1.1em Arial, sans-serif; color: #e8e8e8; }
+  .timer .drumwin::before { content: ""; position: absolute; left: .12em; top: 50%; width: .3em; height: .12em; margin-top: -.06em; background: #ddd; z-index: 1; }   /* 読み取りの印 */
+  .timer .drumwin::after { content: ""; position: absolute; inset: 0; pointer-events: none;   /* 円筒の陰：上下が暗い */
+    background: linear-gradient(rgba(0,0,0,.85), rgba(0,0,0,0) 38%, rgba(0,0,0,0) 62%, rgba(0,0,0,.85)); }
+  .timer .wind { flex: none; width: .75em; height: 2.6em; margin-left: -.3em; border-radius: .2em; touch-action: none; cursor: ns-resize;   /* 横のゼンマイのノブ（ギザギザの円筒の縁） */
+    background: repeating-linear-gradient(#9a9a9a 0 .12em, #3a3a3a .12em .24em), #666; box-shadow: inset .15em 0 .2em rgba(255,255,255,.25), inset -.2em 0 .25em rgba(0,0,0,.7), 0 .1em .2em #000; }
+  /* 枠の外の右（本体の縁まで）を上下になでても巻ける。見えない受け口 */
+  .windzone { position: absolute; right: -1.2em; top: 1.3em; width: 2.6em; height: 4.4em; z-index: 3; touch-action: none; cursor: ns-resize; }
+  .memory {
+    position: absolute; right: 1.2em; top: 5.6em; width: 15em; padding: .45em .8em; cursor: pointer;
+    background: #141414; border: .15em solid #4a4a4a; display: flex; align-items: center; gap: .6em;
+  }
+  .memory .txt { flex: 1; font-size: .9em; font-weight: 700; padding-left: .8em; }
+  .memory .win { width: 1.6em; height: 1.6em; display: flex; align-items: center; justify-content: center; font-size: 1.5em; color: #444; }
+  .memory .win.on { color: #ffd23f; text-shadow: 0 0 .4em #fa0; }
+  .output {
+    position: absolute; right: 1.2em; top: 9.4em; width: 15em; padding: .45em .8em;
+    background: #141414; border: .15em solid #4a4a4a; display: flex; align-items: center; gap: .6em;
+  }
+  .output .txt { flex: 1; font-size: .9em; font-weight: 700; padding-left: .8em; white-space: nowrap; }
+  /* RadioPi：スタジオの ON AIR 灯のような箱。家のラジオで鳴らしている間だけオレンジに光る */
+  .output .pilot { cursor: pointer; padding: .32em .5em; margin-right: 0; border-radius: .08em; font-size: .9em; font-weight: 900; letter-spacing: .03em; line-height: 1;
+    font-family: "Arial Black", "Helvetica Neue", Arial, sans-serif; color: #5a3a1c;
+    border: .2em solid; border-color: #d8d8d8 #8a8a8a #6a6a6a #b8b8b8;   /* 銀の枠：上と左が明るい */
+    background: radial-gradient(ellipse at 50% 50%, #3a2614, #1c1208 75%);
+    box-shadow: 0 0 0 .06em #222, 0 .12em .25em rgba(0,0,0,.7), inset 0 0 .35em #000; }
+  .output.home .pilot { color: #fff; text-shadow: 0 0 .2em rgba(255,255,255,.7);
+    background: radial-gradient(ellipse at 50% 50%, #ffd08a, #ff9a1a 35%, #e86a00 70%, #9a3a00);
+    box-shadow: 0 0 0 .06em #222, 0 0 .7em rgba(255,140,20,.7), 0 0 1.4em rgba(255,120,0,.35), inset 0 0 .35em rgba(120,40,0,.8); }
+  /* 銘板：昔のロゴのような太いスラブセリフ（Rokkitt 650、「SORY」の4文字だけ入れたフォント）を横に広げる */
+  @font-face { font-family: "PlateSlab"; src: url("plate-font.woff2?v3") format("woff2"); font-weight: 650; font-display: block; }
+  /* 実機写真（2026-10-13）：濃い灰色の額縁の中に銀の板、ふちの少し内側に黒い細線、文字は上下の真ん中で横に広い */
+  .plate {
+    position: absolute; left: 2.1em; bottom: 1.3em; width: 10.6em; height: 2.75em; box-sizing: border-box; font-size: .88em;
+    display: flex; align-items: center; justify-content: center;
+    border: .26em solid #3c3c3c; border-radius: .12em;
+    background: linear-gradient(#f6f6f6, #d4d4d4 45%, #bcbcbc 55%, #e6e6e6);
+    box-shadow: 0 0 0 .06em #111, inset 0 0 0 .05em #8a8a8a, 0 .12em .25em rgba(0,0,0,.6);
+  }
+  .plate { cursor: pointer; z-index: 2; }
+  .plate::before { content: ""; position: absolute; inset: .14em; border: .09em solid #1a1a1a; pointer-events: none; }
+  .plate span {
+    display: block; transform: translateY(.07em) scaleX(1.32); line-height: 1;
+    color: #111; font-family: "PlateSlab", Rockwell, Georgia, serif; font-weight: 650; font-size: 1.8em; letter-spacing: .09em; margin-right: -.09em;
+  }
+  .now .np { color: #8fd0ff; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+  .now {
+    position: absolute; left: 1.4em; right: 19.5em; top: 2.1em; font-size: 1em; line-height: 1.35;
+    color: #bbb; text-shadow: 0 0 .3em #000; cursor: pointer; z-index: 2;
+  }
+  /* 一番下の物差し（選局とは連動しない）。クロームの枠の中に黒い帯、白い数字と目盛り */
+  /* 実機どおり：黒い帯に白い目盛り（数字と短い縦線）、その下に明るいアルミの棒 */
+  .scale { height: 2.7em; margin: .5em -.6em 0; position: relative; }
+  .scale::before { content: ""; position: absolute; left: .2em; right: .2em; top: 0; height: 1.75em; background: #0b0b0b; border-top: .08em solid #2a2a2a; }
+  .scale::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1em; border-radius: .18em;
+    background: linear-gradient(#f2eee4, #d9d3c2 30%, #c3bca7 65%, #9a937e);
+    box-shadow: inset 0 .07em 0 rgba(255,255,255,.7), inset 0 -.08em 0 rgba(0,0,0,.35), 0 .12em .2em rgba(0,0,0,.6); }
+  .scale .nums { position: absolute; left: 1.1em; right: 1.1em; top: 0; height: 1.75em; z-index: 1; display: flex; justify-content: space-between; align-items: flex-end; padding-bottom: .3em; }
+  .scale .nums span { font-size: .72em; font-weight: 600; color: #e8e8e8; display: flex; align-items: flex-end; gap: .3em; line-height: 1; }
+  .scale .nums span::after { content: ""; width: .12em; height: .95em; background: #e8e8e8; }
+  .ver { position: absolute; right: 1.2em; bottom: .6em; font-size: .7em; color: #555; }
+
+  #toast {
+    position: fixed; left: 50%; bottom: calc(env(safe-area-inset-bottom) + 4em); transform: translateX(-50%);
+    background: rgba(20,20,20,.94); border: 1px solid #555; color: #fff; padding: .7em 1em; border-radius: .6em;
+    font-size: 14px; max-width: 90vw; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 20; text-align: center;
+  }
+  #toast.show { opacity: 1; }
+
+  /* 設定シート */
+  #sheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+  #sheet[hidden] { display: none; }
+  #sheet .box {
+    width: 100%; max-width: 480px; max-height: 88dvh; overflow-y: auto; -webkit-user-select: text; user-select: text;
+    background: #1d1d1d; border-top: 2px solid #888; border-radius: 14px 14px 0 0;
+    padding: 16px 16px calc(16px + env(safe-area-inset-bottom)); font-size: 15px;
+  }
+  #sheet h2 { font-size: 17px; margin-bottom: 10px; }
+  #sheet .brow { display: grid; grid-template-columns: 3.2em 6.5em 1fr; gap: 8px; align-items: center; margin-bottom: 8px; }
+  #sheet select, #sheet input { font-size: 16px; padding: 7px; background: #0f0f0f; color: #eee; border: 1px solid #555; border-radius: 6px; width: 100%; }
+  #sheet .btns { display: flex; gap: 10px; margin: 14px 0; }
+  #sheet button { flex: 1; font-size: 16px; padding: 10px; border-radius: 8px; border: 1px solid #777; background: #333; color: #fff; }
+  #sheet button.primary { background: #d86410; border-color: #ff9a3d; }
+  /* 選局リスト（選局窓をタップで開く） */
+  #tuneSheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+  #tuneSheet[hidden] { display: none; }
+  #tuneSheet .box {
+    width: 100%; max-width: 480px; max-height: 80dvh; display: flex; flex-direction: column;
+    background: #1d1d1d; border-top: 2px solid #888; border-radius: 14px 14px 0 0;
+    padding: 14px 12px calc(12px + env(safe-area-inset-bottom)); font-size: 15px;
+  }
+  #tuneSheet h2 { font-size: 17px; margin: 0 4px 8px; }
+  #tuneSheet .tunehead { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+  #tuneSheet #tuneOrder { flex: none; margin: -1px 2px 0 0; font-size: 13px; padding: 3px 10px; border-radius: 14px; background: #333; color: #eee; border: 1px solid #666; cursor: pointer; }
+  #tuneList { overflow-y: auto; flex: 1; -webkit-overflow-scrolling: touch; }
+  #tuneList .st { display: grid; grid-template-columns: 2.4em 1fr auto; gap: 8px; align-items: center; padding: 9px 6px; border-bottom: 1px solid #2c2c2c; cursor: pointer; }
+  #tuneList .st.cur { background: #3a2a14; }
+  #tuneList .st .no { color: #888; text-align: right; font-variant-numeric: tabular-nums; }
+  #tuneList .st .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #tuneList .st .meta { color: #999; font-size: 12.5px; white-space: nowrap; }
+  #tuneList .empty { color: #aaa; padding: 20px 6px; }
+  #tuneSheet button { margin-top: 10px; font-size: 16px; padding: 10px; border-radius: 8px; border: 1px solid #777; background: #333; color: #fff; }
+  .window { cursor: pointer; }
+  /* SW1〜3 のジャンル割り当て（BAND SELECT の文字をタップで開く） */
+  #genreSheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
+  #genreSheet[hidden] { display: none; }
+  #genreSheet .box {
+    width: 100%; max-width: 480px; max-height: 88dvh; overflow-y: auto;
+    background: #1d1d1d; border-top: 2px solid #888; border-radius: 14px 14px 0 0;
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom)); font-size: 15px;
+  }
+  #genreSheet h2 { font-size: 17px; margin-bottom: 10px; }
+  #genreSheet .grow { margin-bottom: 12px; }
+  #genreSheet .grow b { display: block; margin-bottom: 6px; }
+  #genreSheet .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  #genreSheet .chip { font-size: 14px; padding: 6px 10px; border-radius: 16px; border: 1px solid #555; background: #262626; color: #ddd; cursor: pointer; }
+  #genreSheet .chip.on { background: #d86410; border-color: #ff9a3d; color: #fff; }
+  #genreSheet .tabs { display: flex; gap: 6px; margin-bottom: 12px; }
+  #genreSheet .tab { flex: 1; padding: 6px 4px; border-radius: 8px; border: 1px solid #555; background: #262626; color: #ddd; text-align: center; cursor: pointer; line-height: 1.3; }
+  #genreSheet .tab small { display: block; font-size: 12px; color: #aaa; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #genreSheet .tab.on { border-color: #ff9a3d; background: #3a2a1c; }
+  #genreSheet .tab.on small { color: #ffc58a; }
+  #genreSheet .ghead { font-size: 13px; color: #aaa; margin: 4px 0 6px; }
+  #genreSheet .chip .n { font-size: 11px; color: #999; margin-left: 4px; }
+  #genreSheet .chip.on .n { color: #ffe0c0; }
+  #genreSheet .chip.few { opacity: .55; }
+  #genreSheet .btns { display: flex; gap: 10px; margin-top: 6px; }
+  #genreSheet .btns button { flex: 1; font-size: 16px; padding: 10px; border-radius: 8px; border: 1px solid #777; background: #333; color: #fff; }
+  #genreSheet .btns button.primary { background: #d86410; border-color: #ff9a3d; }
+  .band .title { cursor: pointer; z-index: 1; }
+  #sheet .help { color: #bbb; font-size: 13.5px; line-height: 1.6; }
+  #sheet .help b { color: #eee; }
+  /* 公開版：家のラジオ用の表示を隠す（場所は空けたまま）、説明は公開版用に差し替え */
+  .public #output { visibility: hidden; }
+  .public .home-only, html:not(.public) .public-only { display: none; }
+</style>
+</head>
+<body>
+<div class="radio" id="radio">
+  <div class="rim"></div>
+  <div class="antenna" id="antenna"><div class="basecol"><div class="rodwrap"><div class="knuckle"></div><div class="rodbody"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="rodtip"></div></div></div><div class="tip"></div><div class="collar"></div><div class="antring"></div></div>
+  <div class="anthit" id="antHit"></div>
+  <div class="top">
+    <!-- 左列 -->
+    <div class="col">
+      <div class="switches">
+        <div class="panel sw" id="swLight"><div class="label">LIGHT</div><div class="label small"><svg viewBox="0 0 10 12" style="width:.8em;height:1em;display:block;margin:0 auto"><path d="M5 0v9M1.5 6L5 10.5 8.5 6" stroke="#eee" stroke-width="1.6" fill="none"/></svg></div><div class="slot"><div class="cap"></div></div></div>
+        <div class="panel sw off" id="swPower"><div class="label">POWER</div><div class="label small">ON</div><div class="slot"><div class="cap red"></div></div></div>
+      </div>
+      <div class="panel vol">
+        <div class="label">VOLUME</div>
+        <div class="knob-wrap" id="kVol">
+          <svg class="ticks" viewBox="-50 -50 100 100" id="volTicks"></svg>
+          <div class="knob"><div class="cap2"></div><div class="mark"></div></div>
+        </div>
+        <div class="minmax"><span class="label small">MIN</span><span class="label small">MAX</span></div>
+      </div>
+      <div class="panel tone">
+        <div class="head"><span class="label small hb">BASS</span><span class="label small ht">TONE</span><span class="label small htr">TREBLE</span></div>
+        <div class="row">
+          <div class="tk"><div class="knob-wrap" id="kBass"><svg class="ticks tone-ticks" viewBox="-50 -50 100 100"></svg><div class="knob"><div class="cap2"></div><div class="mark"></div></div></div><div class="minmax"><span class="label small">MIN</span><span class="label small">MAX</span></div></div>
+          <div class="tk"><div class="knob-wrap" id="kTreble"><svg class="ticks tone-ticks" viewBox="-50 -50 100 100"></svg><div class="knob"><div class="cap2"></div><div class="mark"></div></div></div><div class="minmax"><span class="label small">MIN</span><span class="label small">MAX</span></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 中央列 -->
+    <div class="col">
+      <div class="window"><canvas id="dial"></canvas></div>
+      <div class="bands" id="bands"></div>
+      <div class="tune-area">
+        <div class="speed" id="speed">
+          <div class="label small">TUNING SPEED</div>
+          <div class="row">
+            <span class="label small">SLOW</span><span class="br l"></span>
+            <span class="sw2"><span class="dot"></span></span>
+            <span class="br r"></span><span class="label small">FAST</span>
+          </div>
+        </div>
+        <div class="arch"></div>
+        <div class="knob-wrap tuning" id="kTune">
+          <div class="ring"></div>
+          <div class="face" id="tuneFace"><div class="dimple"></div></div>
+          <div class="shine"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右列 -->
+    <div class="col">
+      <div class="panel meter">
+        <svg viewBox="0 0 100 46" id="meterSvg">
+          <defs>
+            <radialGradient id="lamp" cx="50%" cy="100%" r="90%">
+              <stop offset="0" id="lampIn" stop-color="#3e423c"/><stop offset="1" id="lampOut" stop-color="#20221e"/>
+            </radialGradient>
+          </defs>
+          <rect x="0" y="0" width="100" height="46" fill="url(#lamp)"/>
+          <g id="meterTicks" stroke="#e4e4e4" fill="#e4e4e4" font-size="5" font-family="Arial" text-anchor="middle"></g>
+          <text x="50" y="25.6" font-size="7.4" text-anchor="middle" fill="#d8d8d8" font-family="Arial" letter-spacing=".3">TUNING</text>
+          <g id="needle"><line x1="50" y1="70.5" x2="50" y2="8" stroke="#f0f0f0" stroke-width="1.1"/></g>
+        </svg>
+        <div class="label small" style="margin-top:.3em">TUNING METER</div>
+      </div>
+      <div class="model"><svg viewBox="10 0 80 10"><g stroke="#ddd" stroke-width="1" fill="#ddd"><path d="M13 5H43M57 5H87" fill="none"/><!-- 矢じりは半分だけ：左は下側、右は上側（実機の形） --><path d="M10 4.5l5.5 3v-3z"/><path d="M90 5.5l-5.5-3v3z"/><circle cx="50" cy="5" r="4.3" fill="none"/></g><text x="50" y="7.3" font-size="6.5" font-weight="700" font-family="Arial" text-anchor="middle" fill="#ddd">D</text></svg><span>NET 5BAND RECEIVER<br>WR-5800</span></div>
+      <div class="panel bfo">
+        <div class="sw" id="swBfo"><div class="label small">BFO</div><div class="label small" style="font-size:.6em">NOISE</div><div class="slot"><div class="cap"></div></div></div>
+        <div class="setbtn" id="btnSet"><div class="badge">SET<br>UP</div></div>
+        <div class="sw" id="swAfc"><div class="label small">AFC</div><div class="label small" style="font-size:.6em">AUTO</div><div class="slot"><div class="cap"></div></div></div>
+      </div>
+      <div class="panel band" id="bandPanel">
+        <div class="knob-wrap" id="kBand"><div class="knob"><div class="cap2"></div></div><div class="lever" id="lever"></div></div>
+        <div class="title label">BAND<br>SELECT</div>
+        <div class="ssl">SSL</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bar"></div>
+  <div class="lower">
+    <div class="grille"></div>
+    <div class="now" id="now"></div>
+    <div class="timer" id="timer"><div class="txt"><span style="white-space:nowrap;display:inline-block;margin-bottom:.35em">TIME SET <span class="onoff">ON/OFF</span></span><br><span class="small" id="timerTxt" style="font-weight:400;color:#aaa">上へなでて巻く（最大2時間）</span></div><div class="drumwin" id="drumWin"><div class="drum" id="drum"></div></div><div class="wind" id="wind"></div></div>
+    <div class="windzone" id="windZone"></div>
+    <div class="memory" id="memory"><div class="txt"><span style="white-space:nowrap">MEMORY ON/OFF</span><br><span class="small" id="memCount" style="font-weight:400;color:#aaa"></span></div><div class="win" id="memWin">★</div></div>
+    <div class="output" id="output"><div class="txt">SPEAKER<br><span class="small" style="font-weight:400;color:#aaa">家のラジオで鳴らす</span></div><div class="pilot">RadioPi</div></div>
+    <div class="plate"><span>SORY</span></div>
+    <div class="ver" id="ver"></div>
+  </div>
+  <div class="scale">
+    <div class="nums" id="nums"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="genreSheet" hidden>
+  <div class="box">
+    <h2>SW1〜SW3 のジャンル</h2><div style="font-size:13px;color:#aaa;margin:-4px 0 10px">上でバンドを選んでから、ジャンルをタップ</div>
+    <div id="genreRows"></div>
+    <div class="btns"><button id="genreCancel">閉じる</button><button class="primary" id="genreSave">決定</button></div>
+  </div>
+</div>
+
+<div id="tuneSheet" hidden>
+  <div class="box">
+    <div class="tunehead"><h2 id="tuneTitle"></h2><button id="tuneOrder"></button></div>
+    <div id="tuneList"></div>
+    <button id="tuneClose">閉じる</button>
+  </div>
+</div>
+
+<div id="sheet" hidden>
+  <div class="box">
+    <h2>バンドの設定</h2>
+    <div id="bandRows"></div>
+    <div class="brow" style="grid-template-columns: auto 1fr; margin-top: 14px"><b>SEARCH</b><select id="searchSec"></select></div>
+    <div class="btns"><button id="sheetCancel">閉じる</button><button class="primary" id="sheetSave">保存して選び直す</button></div>
+    <div class="help">
+      <b>POWER</b>：電源（再生／停止）<br>
+      <b>アンテナ</b>（左上の銀色の頭）：タップで上へ伸び、最後に台座と接続部が出てから右へ倒れる。もう一度タップでしまう（見た目だけ）<br>
+      <b>大きいダイヤル</b>：回して局を選ぶ。タップでその局を鳴らす。局と局の間では両方の局が混ざって聞こえる（iPhone は真ん中あたりだけ重なる）<br>
+      <b>選局窓</b>：タップで今のバンドの局の一覧。選ぶとその局を鳴らす。右上のボタンで「いま人気」（直近の再生回数の順）と「定番」（いいねの累計の順）を切り替え<br>
+      <b>SEARCH</b>（選局窓のいちばん下の真ん中）：タップで、受信できてから決めた秒数（この画面の SEARCH で選ぶ。はじめは 10 秒）ずつ聞いて次の局へ（つながらない局は飛ばす）。端まで行くと逆へ戻る。サーチ中は照明がつき、次の局へは 4 秒かけてゆっくり回る（間で 2 局が混ざる）。もう一度タップかダイヤルを回すと止まる<br>
+      <b>BAND SELECT の文字</b>：タップで SW1〜SW3 のジャンルを選ぶ<br>
+      <b>AFC（AUTO）</b>：ON なら、ダイヤルを止めると自動で鳴る<br>
+      <b>BFO（NOISE）</b>：選局中の「ザー」音。実機と同じく下で ON、上で OFF<br>
+      <b>TUNING SPEED</b>：タップで回す速さを切り替え<br>
+      <b>BAND SELECT</b>：タップか回して FM〜SW3 を切り替え。FM はお気に入り<br>
+      <b>TIME SET ON/OFF</b>：ゼンマイ式タイマー（最大 2 時間）。ドラム・右のノブ・枠の外の右側を上へなでて巻くと電源が入り（POWER スイッチは OFF のまま）、ドラムが 0 に戻ると切れる。POWER スイッチが ON なら切れない。下へなでると戻せる<br>
+      <b>MEMORY</b>：今の局をお気に入りに入れる／外す<br>
+      <span class="home-only"><b>TONE</b>：BASS（低音）・TREBLE（高音）。パソコン・Android だけ効く（iPhone と HOME では飾り）<br></span>
+      <span class="public-only"><b>TONE</b>：BASS（低音）・TREBLE（高音）。飾り（音質は変わらない）<br></span>
+      <b>LIGHT</b>：押している間と、離して 1 秒だけ窓とメーターの照明がつく（実機と同じ戻りスイッチ）<br>
+      <span class="home-only"><b>RadioPi</b>：タップで ON AIR 灯のようにオレンジに光ると家のラジオ（Radiopi2）で鳴らす。消えているときはこのスマホで鳴らす。光っているときは VOLUME つまみが家のラジオの音量（MIN 40〜MAX 90、5 ずつ）<br></span>
+      <span class="home-only"><b>VOLUME</b>：iPhone ではラジオの音量は本体の音量ボタンで（iPhone のブラウザはラジオの音量を変えさせない）。このつまみはザー・カチッの大きさ。パソコン・Android ではラジオの音量も変わる<br></span>
+      <span class="public-only"><b>VOLUME</b>：ラジオの音量は本体の音量ボタンで。このつまみはザー・カチッの大きさ<br></span>
+      局は radio-browser.info から「いま人気」（または「定番」）の順に出しています<span class="home-only">（http の局と音量・音質の調整は Radiopi2 の中継で鳴らします）</span><span class="public-only">（https で配信している局だけ）</span>。<br>
+      <div style="margin-top:10px;padding-top:8px;border-top:1px solid #444"><b>バンドの設定の入れ方</b><br>
+      <b>ジャンル</b>：局に付いているジャンル名（例：jazz、rock、bossa nova）<br>
+      <b>局名</b>：局の名前の一部。その文字を名前に含む局が出る（例：BBC、NHK、SomaFM）<br>
+      <b>国コード</b>：2文字の国コード（例：JP、US、DE）<br>
+      <b>言語</b>：英語で書いた言語名（例：japanese、english、german）<br>
+      どれも大文字・小文字は区別しない。人気の順に並ぶ</div>
+      <span id="verSheet"></span>
+    </div>
+  </div>
+</div>
+
+<script>
+const APP_VERSION = 'v2.68'; // 変更してサーバに上げるたびに進める
+// 公開版（GitHub Pages）では publish-pages.py が true にする。Radiopi2 が無いので、中継（stream.php）・
+// 家のラジオ（RadioPi）・曲名表示（nowplaying.php）を使わず、https の局だけを素の <audio> で鳴らす
+const PUBLIC_BUILD = true;
+if (PUBLIC_BUILD) document.documentElement.classList.add('public');
+const IS_IOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const BANDS = ['FM', 'MW', 'SW1', 'SW2', 'SW3'];
+const BAND_ANGLES = [-80, -40, 0, 40, 80];
+const TYPES = { tag: 'ジャンル', name: '局名', country: '国コード', language: '言語' };
+const DEFAULT_BANDS = [
+  { type: 'memory' },
+  { type: 'country', q: 'JP' },
+  { type: 'tag', q: 'jazz' },
+  { type: 'tag', q: 'bossa nova' },
+  { type: 'tag', q: 'classical' },
+];
+const HOME_URL = '';
+const API_HOSTS =['de1.api.radio-browser.info', 'de2.api.radio-browser.info'];
+const STORE_KEY = 'webradio5800';
+
+const $ = id => document.getElementById(id);
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+
+// ---------- 保存（使えない環境でも動くように try で包む） ----------
+function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
+const S = Object.assign({
+  band: 2, pos: {}, afc: true, bfo: true, fast: false,
+  vol: 0.7, bass: 0.5, treble: 0.5, bands: DEFAULT_BANDS, favs: [], volHint: false, home: false, searchSec: 10, order: 'clickcount',
+}, loadStore());
+if (PUBLIC_BUILD) S.home = false;
+let saveTimer = 0;
+function save() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => { try { localStorage.setItem(STORE_KEY, JSON.stringify(S)); } catch {} }, 300);
+}
+
+// ---------- 状態 ----------
+let power = false;
+let stations = [];       // 今のバンドの局
+let loading = false;
+let loadError = '';
+let pos = 0;             // ダイヤル位置（局の番号、小数あり）
+let viewPos = 0;         // 選局表示に使う位置（pos をなめらかに追う）
+let vel = 0;             // 惰性の速さ（局/ms）
+let dragging = false;
+let lastIdx = -1;
+// ダイヤルの角度は、いつも選局位置 pos から計算する（実機のように、つまみと目盛りが糸でつながっている）。
+// 端まで行けばつまみも止まる。速さやバンドを替えたときは、つまみが跳ばないよう tuneOffset で合わせる
+let tuneOffset = 0;
+const knobAngle = () => tuneOffset + pos * degPerStation();
+function keepKnob(change) { const a = knobAngle(); change(); tuneOffset = a - pos * degPerStation(); dirty = true; }
+let playing = null;      // 鳴らしている局
+let status = 'off';      // off / idle / tuning / onair / nosignal
+let settleTimer = 0, watchdog = 0;
+let meter = 0, meterKickT = -1e9;
+let dirty = true;
+const cache = {};
+
+// ---------- 小物 ----------
+let toastTimer = 0;
+function toast(msg, ms = 2500) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// ---------- 音の出口 ----------
+// iPhone は JS から <audio> の音量を変えられない。そこで配信を Web Audio に通し、GainNode で音量を変える（elWA）。
+// Web Audio に通せるのは CORS を返す配信だけ（調べた範囲で約9割）。返さない局と HLS は、
+// 音量を変えられない素の <audio>（elPlain）で鳴らす。効果音（カチッ、ノイズ）も同じ Web Audio で作る
+const elWA = new Audio();
+let elPlain = new Audio();
+// 前後の局を裏で音を消して受けておく <audio>。ダイヤルを 1 局動かしたら、受けていた方と入れ替えてすぐ鳴らす
+const standby = [new Audio(), new Audio()];
+elWA.crossOrigin = 'anonymous';
+for (const el of [elWA, elPlain, ...standby]) { el.preload = 'none'; el.setAttribute('playsinline', ''); }
+for (const el of standby) el.muted = true;
+let cur = elWA;
+const noCors = new Set();   // 中継（Web Audio）で鳴らせず、直接鳴らしている配信
+const SILENT_WAV = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=';
+let ac = null, noiseGain = null, fxGain = null, volGain = null, bassF = null, trebleF = null, clickBuf = null, unlocked = false;
+// TONE：真ん中で平ら、MIN で -12dB、MAX で +12dB（低音は 250Hz 以下、高音は 3kHz 以上）
+function applyTone() {
+  if (bassF) bassF.gain.value = (S.bass - .5) * 24;
+  if (trebleF) trebleF.gain.value = (S.treble - .5) * 24;
+}
+let blendMain = 1;   // ダイヤルが隣の局へ寄った分だけ、今の局を小さくする（1＝そのまま）
+function applyVolume() {
+  if (volGain) volGain.gain.value = S.vol * S.vol * blendMain * blendMain;   // 耳の感じ方に合わせて2乗
+  if (fxGain) fxGain.gain.value = .8 * S.vol;
+  if (!IS_IOS) elPlain.volume = S.vol * blendMain;
+}
+// ダイヤルが局と局の間にあるとき、裏で受けている隣の局も鳴らす（混信のように）
+//   パソコン・Android：近い方が大きく、遠い方が小さく、少しずつ入れ替わる
+//   iPhone：音量を変えさせないので、真ん中あたり（40〜60%）だけ 2 局を同じ大きさで重ねる
+let blendEl = null, blendK = -1;
+function updateBlend() {
+  let el = null, f = 0;
+  const i = power && !S.home && playing ? stations.findIndex(st => st.id === playing.id) : -1;
+  if (i >= 0 && status === 'onair') {
+    const d = pos - i, n = d > 0 ? i + 1 : i - 1;
+    f = Math.min(1, Math.abs(d));
+    const nb = stations[n];
+    if (f > .02 && nb) el = standby.find(e => e.dataset.url === nb.url && !e.paused && e.readyState >= 2) || null;
+  }
+  if (!el) f = 0;
+  const k = IS_IOS ? (f > .4 && f < .6 ? 1 : 0) : f;
+  if (el === blendEl && Math.abs(k - blendK) < .005) return;
+  for (const e of standby) if (e !== el && !e.muted) e.muted = true;
+  blendEl = el; blendK = k;
+  if (IS_IOS) { if (el) el.muted = k === 0; return; }   // iPhone は今の局はそのまま、隣を出すか消すかだけ
+  blendMain = Math.cos(k * Math.PI / 2);   // 合わせた大きさが変わらないように（cos と sin）
+  applyVolume();
+  if (el) { el.volume = S.vol * Math.sin(k * Math.PI / 2); el.muted = k === 0; }
+}
+function ensureAudio() {
+  if (!unlocked) {
+    // iPhone はタップの中で一度 play() した要素しか、後から鳴らせない。両方を無音で一度鳴らしておく
+    unlocked = true;
+    for (const el of [elWA, elPlain, ...standby]) if (!el.getAttribute('src')) { el.src = SILENT_WAV; el.play().catch(() => {}); }
+  }
+  if (ac) { if (ac.state !== 'running') ac.resume().catch(() => {}); return; }
+  try {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback'; // マナースイッチで消えない・裏でも鳴らす
+    ac = new (window.AudioContext || window.webkitAudioContext)();
+    volGain = ac.createGain(); volGain.connect(ac.destination);
+    bassF = ac.createBiquadFilter(); bassF.type = 'lowshelf'; bassF.frequency.value = 250;
+    trebleF = ac.createBiquadFilter(); trebleF.type = 'highshelf'; trebleF.frequency.value = 3000;
+    ac.createMediaElementSource(elWA).connect(bassF); bassF.connect(trebleF); trebleF.connect(volGain);
+    applyTone();
+    fxGain = ac.createGain(); fxGain.connect(ac.destination);
+    applyVolume();
+    const len = ac.sampleRate * 2, nb = ac.createBuffer(1, len, ac.sampleRate), d = nb.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    const src = ac.createBufferSource(); src.buffer = nb; src.loop = true;
+    const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = .5;
+    noiseGain = ac.createGain(); noiseGain.gain.value = 0;
+    src.connect(bp); bp.connect(noiseGain); noiseGain.connect(fxGain); src.start();
+    const cl = Math.floor(ac.sampleRate * .012); clickBuf = ac.createBuffer(1, cl, ac.sampleRate);
+    const c = clickBuf.getChannelData(0);
+    for (let i = 0; i < cl; i++) c[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / cl, 4);
+  } catch { ac = null; }
+}
+function click() {
+  if (!ac || !clickBuf || !power) return;   // 電源OFFのときは操作音を出さない
+  const s = ac.createBufferSource(), g = ac.createGain(); g.gain.value = .5;
+  s.buffer = clickBuf; s.connect(g); g.connect(fxGain); s.start();
+}
+let noiseLv = -1;
+function setNoise(level) {
+  if (!noiseGain) return;
+  const v = S.bfo && power ? level : 0;
+  if (v === noiseLv) return;   // 同じ値を毎フレーム・毎回の指の動きで積み増さない（Safari では予定が溜まって重くなる）
+  noiseLv = v;
+  noiseGain.gain.setTargetAtTime(v, ac.currentTime, .05);
+}
+// iPhone は「指を離した」（touchend / click）ときしか Web Audio を再開させない。止まったままだと
+// 配信は Web Audio を素通りして鳴り、音量・音質が効かなくなる（ロックから戻った後など）。どの操作でも再開を試みる
+for (const t of ['pointerdown', 'pointerup', 'touchend', 'click']) document.addEventListener(t, ensureAudio, true);
+document.addEventListener('visibilitychange', () => {
+  if (!ac) return;
+  // 配信を Web Audio に通して鳴らしている間は、裏に回っても止めない
+  const busy = power && !S.home && cur === elWA && cur.getAttribute('src');
+  if (document.hidden) { if (!busy) ac.suspend().catch(() => {}); }
+  else ac.resume().catch(() => {});
+});
+
+// ---------- 再生 ----------
+let stoppingByMe = false;
+
+// ---------- 家のラジオ（Radiopi2 の Node-RED /HAL/music。HAL 版と同じ入口） ----------
+// 「URL <配信> <局名>」で任意の局を流す。音量は「ラジオ 音量 上げる／下げる」
+// 止める命令は今の /HAL/music には無い（BGM OFF は MQTT だけ）。「ラジオ 停止」を送り、返事をそのまま見せる
+async function postHome(text) {
+  const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(HOME_URL, { method: 'POST', headers: { 'content-type': 'text/plain; charset=utf-8' }, body: text, signal: ctl.signal });
+    const reply = (await r.text()).trim();
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return reply;
+  } finally { clearTimeout(t); }
+}
+async function playHome(st) {
+  const my = st;
+  try {
+    await postHome(`URL ${st.url} 音量${homeVolValue()} ${st.name}`);   // 局を替えるたびに、VOLUME つまみの音量にそろえる
+    if (playing !== my || !power || !S.home) return;
+    status = 'onair'; dirty = true; updateNow(); pollNowTitle();   // 「家のラジオで〜を流します」の知らせは出さない（局名は窓に出ている）
+  } catch {
+    if (playing !== my) return;
+    status = 'nosignal'; dirty = true; updateNow();
+    toast(`家のラジオ（${new URL(HOME_URL).host}）に届きませんでした`);
+  }
+}
+function stopHome() {
+  postHome('ラジオ 停止').catch(() => toast('家のラジオに届きませんでした'));   // 止めた知らせは出さない
+}
+// 家のラジオの音量：VOLUME つまみの MIN〜MAX を 40〜90 に（5 ずつ）。つまみの位置をそのまま送る
+const HOME_VOL_MIN = 40, HOME_VOL_MAX = 90;
+const homeVolValue = () => HOME_VOL_MIN + Math.round((S.homeVol ?? 0) * (HOME_VOL_MAX - HOME_VOL_MIN) / 5) * 5;
+let homeVolSent = -1, homeVolBusy = false, homeVolTimer = 0;
+function homeVolume() {
+  const v = homeVolValue();
+  if (v === homeVolSent) return;
+  if (homeVolBusy) { clearTimeout(homeVolTimer); homeVolTimer = setTimeout(homeVolume, 200); return; }   // 送っている間に回した分は、あとでまとめて
+  homeVolBusy = true; homeVolSent = v;
+  postHome(`ラジオ 音量 ${v}`).catch(() => { homeVolSent = -1; toast('家のラジオに届きませんでした'); })
+    .finally(() => { homeVolBusy = false; });
+}
+
+function play(st) {
+  if (!st) return;
+  playing = st; status = 'tuning'; dirty = true;
+  clearTimeout(watchdog);
+  if (S.home) { stopAudio(); stopStandby(); updateNow(); playHome(st); fillHomepage(st); return; }
+  stopAudio();
+  if (takeStandby(st)) return;   // 裏で受けていた局ならすぐ鳴る
+  // iPhone は途切れない配信を Web Audio に通さない（無音にして直接鳴らす。2026-10-11 実機で確認）ので、いつも素の <audio>
+  const plain = PUBLIC_BUILD || IS_IOS || !ac || /\.m3u8($|\?)/i.test(st.url) || st.hls || noCors.has(st.url);
+  startEl(plain ? elPlain : elWA, st);
+  watchdog = setTimeout(() => { if (status === 'tuning') noSignal(); }, 15000);
+  setMediaSession(st);
+  // radio-browser の再生回数に数える（お作法）。失敗しても気にしない
+  if (st.id) fetch(`https://${API_HOSTS[0]}/json/url/${st.id}`).catch(() => {});
+  fillHomepage(st);
+  updateNow();
+}
+const srcFor = (el, url) => PUBLIC_BUILD ? url : el === elWA || url.startsWith('http://') ? 'stream.php?u=' + encodeURIComponent(url) : url;
+// 裏で受けている局を表に出す：素の <audio> と入れ替えて音を出す
+function takeStandby(st) {
+  const i = standby.findIndex(el => el.dataset.url === st.url && !el.paused && el.readyState >= 2);
+  if (i < 0) return false;
+  const el = standby[i];
+  standby[i] = elPlain; elPlain = el; cur = el;
+  el.muted = false; blendEl = null; blendK = -1; blendMain = 1; applyVolume();
+  status = 'onair'; dirty = true;
+  setMediaSession(st);
+  if (st.id) fetch(`https://${API_HOSTS[0]}/json/url/${st.id}`).catch(() => {});
+  fillHomepage(st); updateNow(); pollNowTitle(); prepareNeighbors();
+  return true;
+}
+// 今の局が鳴り出したら、すぐに前後の局を裏で受け始める（HOME のときと電源 OFF のときは受けない）
+let neighborTimer = 0, standbyOff = false, standbyStartT = -1e9;
+function prepareNeighbors(ms = 0) {
+  clearTimeout(neighborTimer);
+  if (standbyOff) return;
+  neighborTimer = setTimeout(() => {
+    const i = Math.round(pos);
+    const want = power && !S.home && playing ? [stations[i - 1], stations[i + 1]].filter(st => st && st.url !== playing.url).map(st => st.url) : [];
+    const free = standby.filter(el => !want.includes(el.dataset.url));
+    for (const el of free) if (el.getAttribute('src')) { el.pause(); el.removeAttribute('src'); delete el.dataset.url; el.load(); }
+    for (const url of want) {
+      if (standby.some(el => el.dataset.url === url)) continue;
+      const el = free.shift(); if (!el) break;
+      el.muted = true; el.dataset.url = url; el.src = srcFor(el, url);
+      standbyStartT = performance.now(); el.play().catch(() => {});
+    }
+  }, ms);
+}
+function stopStandby() { clearTimeout(neighborTimer); for (const el of standby) if (el.getAttribute('src')) { el.pause(); el.removeAttribute('src'); delete el.dataset.url; el.load(); } }
+function startEl(el, st) {
+  cur = el;
+  if (ac && ac.state !== 'running') ac.resume().catch(() => {});
+  // Radiopi2 の中継（stream.php）から受けるもの：Web Audio に通す方（CORS が要らなくなる）と、http の局
+  // （https のページからは http の音は直接鳴らない）
+  el.dataset.url = st.url;
+  el.src = srcFor(el, st.url);
+  const p = el.play();
+  if (p) p.catch(e => {
+    if (e.name === 'NotAllowedError') { toast('ダイヤルか POWER をタップしてください'); status = 'idle'; }
+    else if (e.name !== 'AbortError' && el === elPlain) noSignal();   // elWA の失敗は error イベントで素の方に切り替える
+  });
+}
+function noSignal() {
+  if (!power) return;
+  status = 'nosignal'; dirty = true; updateNow();
+  stopAudio();
+}
+function stopAudio() {
+  stoppingByMe = true;
+  for (const el of [elWA, elPlain]) if (el.getAttribute('src')) { el.pause(); el.removeAttribute('src'); delete el.dataset.url; el.load(); }
+  setTimeout(() => { stoppingByMe = false; }, 0);
+  clearTimeout(watchdog);
+}
+for (const el of [elWA, elPlain, ...standby]) {   // 入れ替えるので、どの要素も「表に出ているときだけ」反応する
+  const mine = () => el === cur && power && playing && el.getAttribute('src') && el.dataset.url === playing.url;
+  el.addEventListener('playing', () => { if (!mine()) return; clearTimeout(watchdog); status = 'onair'; dirty = true; updateNow(); pollNowTitle(); prepareNeighbors(); });
+  el.addEventListener('waiting', () => { if (mine()) { status = 'tuning'; dirty = true; } });
+  el.addEventListener('error', () => {
+    if (!mine()) return;
+    if (el !== elPlain) {
+      // 中継で鳴らせなかった配信。https なら、音量は変えられないが素の <audio> で直接鳴らす（http は直接は鳴らない）
+      if (!playing.url.startsWith('https://')) { noSignal(); return; }
+      noCors.add(playing.url);
+      stopAudio(); startEl(elPlain, playing); updateNow();
+      return;
+    }
+    noSignal();
+  });
+  // 電話やロック画面の一時停止など、こちら以外から止まったら電源を切った扱いにする
+  el.addEventListener('pause', () => {
+    if (!mine() || stoppingByMe || status !== 'onair') return;
+    // 裏で前後の局を受け始めた直後に止まった：この端末は 2 つ以上を同時に鳴らせない。裏の受信をやめて、今の局に戻す
+    if (performance.now() - standbyStartT < 3000) { standbyOff = true; stopStandby(); el.play().catch(() => {}); return; }
+    powerOffAll();
+  });
+}
+
+// 電源は POWER スイッチと TIME SET（ゼンマイ）のどちらかが入っていれば ON（実機の機械式タイマーと同じ。巻いても POWER スイッチは動かない）
+let swOn = false;
+function setPower(on) {
+  swOn = on;
+  $('swPower').classList.toggle('off', !on);
+  applyPower();
+}
+function powerOffAll() { S.timerEnd = 0; save(); drawTimer(); setPower(false); }   // ロック画面の一時停止などは、タイマーごと止める
+function applyPower() {
+  const on = swOn || timerLeft() > 0;
+  if (on === power) { dirty = true; updateUI(); return; }
+  power = on;
+  if (!on) stopSearch();
+  if (on) {
+    meterKickT = performance.now();
+    ensureAudio();
+    const st = stations[Math.round(pos)];
+    if (st) play(st); else status = 'idle';
+  } else {
+    stopAudio(); stopStandby(); setNoise(0);
+    if (S.home && playing) stopHome();
+    status = 'off'; playing = null;
+  }
+  if ('mediaSession' in navigator) navigator.mediaSession.playbackState = on ? 'playing' : 'paused';
+  dirty = true; updateUI();
+}
+
+function setMediaSession(st) {
+  if (!('mediaSession' in navigator)) return;
+  const art = st.icon && st.icon.startsWith('https://') ? [{ src: st.icon }] : [{ src: 'icon-512.png', sizes: '512x512', type: 'image/png' }];
+  navigator.mediaSession.metadata = new MediaMetadata({
+    title: st.name, artist: [st.cc, st.tags.split(',').slice(0, 3).join(', ')].filter(Boolean).join(' · '),
+    album: 'WEB RADIO ' + BANDS[S.band], artwork: art,
+  });
+}
+if ('mediaSession' in navigator) {
+  const ms = navigator.mediaSession;
+  const h = (a, f) => { try { ms.setActionHandler(a, f); } catch {} };
+  h('play', () => setPower(true));
+  h('pause', () => powerOffAll());
+  h('stop', () => powerOffAll());
+  h('nexttrack', () => step(1));
+  h('previoustrack', () => step(-1));
+}
+function step(d) {
+  if (!stations.length) return;
+  pos = clamp(Math.round(pos) + d, 0, stations.length - 1); vel = 0;
+  onIndexMaybeChanged();
+  if (power) play(stations[Math.round(pos)]);
+}
+
+// ---------- 局を探す ----------
+async function apiGet(path) {
+  let lastErr;
+  for (const host of API_HOSTS) {
+    const ctl = new AbortController(); const t = setTimeout(() => ctl.abort(), 9000);
+    try {
+      const r = await fetch(`https://${host}${path}`, { signal: ctl.signal });
+      if (r.ok) return await r.json();
+      lastErr = new Error('HTTP ' + r.status);
+    } catch (e) { lastErr = e; } finally { clearTimeout(t); }
+  }
+  throw lastErr;
+}
+async function search(b) {
+  // 並び順：clickcount＝いま人気（直近 1 日くらいの再生回数）、votes＝定番（利用者の「いいね」の累計）
+  const p = new URLSearchParams({ hidebroken: 'true', order: S.order === 'votes' ? 'votes' : 'clickcount', reverse: 'true', limit: '200' });
+  const q = (b.q || '').trim();
+  if (b.type === 'country') p.set('countrycode', q.toUpperCase());
+  else if (b.type === 'name') p.set('name', q);
+  else if (b.type === 'language') p.set('language', q.toLowerCase());
+  else p.set('tag', q.toLowerCase());
+  const list = await apiGet('/json/stations/search?' + p);
+  const seen = new Set(), out = [];
+  for (const s of list) {
+    const url = s.url_resolved || s.url || '';
+    const hls = !!s.hls || /\.m3u8($|\?)/i.test(url);
+    if (!/^https?:\/\//.test(url)) continue;
+    if (hls && !url.startsWith('https://')) continue;      // HLS は中継できない。http の HLS は鳴らせない
+    if (PUBLIC_BUILD && !url.startsWith('https://')) continue;   // 公開版は中継が無いので https の局だけ
+    if (/^(OGG|FLAC)$/i.test(s.codec)) continue;          // iPhone で鳴らない形式
+    const key = s.name.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push({ hls, id: s.stationuuid, name: s.name.trim(), url, cc: s.countrycode || '', br: s.bitrate || 0, codec: s.codec || '', tags: s.tags || '', icon: s.favicon || '', hp: s.homepage || '' });
+    if (out.length >= 100) break;
+  }
+  return out;
+}
+
+let loadToken = 0;
+async function loadBand() {
+  const token = ++loadToken;
+  const b = S.bands[S.band];
+  loadError = '';
+  if (b.type === 'memory') {
+    stations = S.favs.slice();
+  } else {
+    const key = b.type + ':' + b.q + ':' + S.order;
+    if (cache[key]) { stations = cache[key]; loading = false; }
+    else {
+      stations = []; loading = true; dirty = true;
+      try { stations = cache[key] = await search(b); }
+      catch { loadError = 'NET ERROR'; stations = []; }
+      if (token !== loadToken) return;
+      loading = false;
+    }
+  }
+  keepKnob(() => { pos = Math.round(clamp(S.pos[S.band] || 0, 0, Math.max(0, stations.length - 1))); });
+  vel = 0; lastIdx = pos;
+  dirty = true; updateUI();
+  if (!$('tuneSheet').hidden) renderTuneSheet();   // 「局を探しています…」のまま止まらないように
+  if (power) {
+    const st = stations[pos];
+    if (st && (!playing || playing.id !== st.id)) play(st);
+    else if (!st) { stopAudio(); playing = null; status = 'idle'; }
+  }
+}
+
+function setBand(i) {
+  i = (i + BANDS.length) % BANDS.length;
+  if (i === S.band) return;
+  stopSearch();
+  S.pos[S.band] = Math.round(pos);
+  S.band = i; save(); click();
+  updateBandUI();
+  loadBand();
+}
+
+// ---------- ダイヤルの動き ----------
+// 1局進むのに回す角度。大きいほどゆっくり（SLOW は 1回転で 0.6局、FAST は 1回転で 2.25局）
+function degPerStation() { return S.fast ? 160 : 600; }
+
+function onIndexMaybeChanged() {
+  const idx = Math.round(pos);
+  if (idx !== lastIdx) {
+    lastIdx = idx;   // 局を通り過ぎても音は出さない
+    S.pos[S.band] = idx; save();
+    updateUI();
+    // 回している最中でも、局に乗ったら少し待ってすぐ鳴らす（選局している手ごたえ）。通り過ぎれば取り消される
+    scheduleSettle(TUNE_PLAY_MS);
+  }
+  dirty = true;
+}
+
+const TUNE_PLAY_MS = 250;   // 局に乗ってから鳴らすまで（回している間）
+let lastRotateT = 0;
+function scheduleSettle(ms = 550) {
+  clearTimeout(settleTimer);
+  settleTimer = setTimeout(() => {
+    const st = stations[Math.round(pos)];
+    if (power && S.afc && st && (!playing || playing.id !== st.id)) play(st);
+  }, ms);
+}
+
+// つまみを指でなぞって回す共通処理
+function rotary(el, { onRotate, onRelease, onTap }) {
+  let cx = 0, cy = 0, last = 0, moved = 0, t0 = 0, samples = [], active = false, sx = 0, sy = 0;
+  const ang = e => Math.atan2(e.clientY - cy, e.clientX - cx) * 180 / Math.PI;
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const r = el.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2;
+    el.setPointerCapture(e.pointerId);
+    active = true; last = ang(e); moved = 0; t0 = performance.now(); samples = []; sx = e.clientX; sy = e.clientY;
+  });
+  el.addEventListener('pointermove', e => {
+    if (!active) return;
+    const r = Math.hypot(e.clientX - cx, e.clientY - cy);
+    const a = ang(e);
+    let d = a - last; if (d > 180) d -= 360; if (d < -180) d += 360;
+    last = a;
+    if (r < 8) return; // 中心付近は角度が暴れるので使わない
+    moved += Math.abs(d);
+    samples.push({ t: performance.now(), d });
+    onRotate && onRotate(d);
+  });
+  const end = e => {
+    if (!active) return; active = false;
+    const dist = Math.hypot(e.clientX - sx, e.clientY - sy), dt = performance.now() - t0;
+    if (moved < 6 && dist < 10 && dt < 500) { onTap && onTap(); return; }
+    const now = performance.now(), recent = samples.filter(s => now - s.t < 90);
+    let v = 0;
+    if (recent.length > 1) v = recent.reduce((a, s) => a + s.d, 0) / Math.max(16, now - recent[0].t);
+    onRelease && onRelease(v);
+  };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+}
+
+rotary($('kTune'), {
+  onRotate(d) {
+    stopSearch();
+    dragging = true; vel = 0;
+    if (!stations.length) return;
+    pos = clamp(pos + d / degPerStation(), 0, stations.length - 1);
+    if (power) setNoise(.18);
+    lastRotateT = performance.now();
+    onIndexMaybeChanged();
+  },
+  onRelease(v) { dragging = false; vel = clamp(v / degPerStation(), -.0025, .0025); },   // 弾いても惰性は控えめ（最大 2.5局/秒）
+  onTap() {
+    stopSearch();
+    const st = stations[Math.round(pos)];
+    if (!power) setPower(true);
+    else if (st) play(st);
+  },
+});
+
+let volAngle = 0;
+function knobFromValue(v) { return -135 + v * 270; }
+// VOLUME・TONE は目盛り（11 本）ごとに吸いつく：目盛りの近くでは止まり、離れると次の目盛りへ。目盛りに乗ると Android は少し震える（音は出さない）。目盛りの間で離せばそこで止まる
+const DETENT = .1, DETENT_HOLD = .032;   // 目盛りの間隔、吸いつく幅（目盛りの間隔の約 1/3）
+function detent(raw) {
+  const n = Math.round(raw / DETENT) * DETENT, e = raw - n;
+  if (Math.abs(e) < DETENT_HOLD) return n;
+  return n + Math.sign(e) * (Math.abs(e) - DETENT_HOLD) * (DETENT / 2) / (DETENT / 2 - DETENT_HOLD);   // 吸いつく幅の外は、隣の目盛りとの真ん中までなめらかに
+}
+function setVolKnob(v) {
+  if (S.home) { S.homeVol = v; save(); updateKnobs(); if (power && playing) homeVolume(); return; }   // 家のラジオの音量（40〜90）
+  S.vol = v; save(); applyVolume(); updateKnobs();
+}
+// つまみごとに、指の動いた分（raw）と、最後に乗った目盛りを覚えておく。回した角度 d から、吸いついたあとの値を返す
+function detentKnob(get) {
+  let raw = null, tick = -1;
+  return {
+    turn(d) {
+      if (raw === null) { raw = get(); tick = Math.round(raw / DETENT); }
+      raw = clamp(raw + d / 270, 0, 1);
+      const v = clamp(detent(raw), 0, 1), t = Math.round(v / DETENT);
+      if (Math.abs(v - t * DETENT) < 1e-9 && t !== tick) { tick = t; try { navigator.vibrate?.(6); } catch {} }
+      return v;
+    },
+    release() { raw = null; },
+  };
+}
+const dVol = detentKnob(() => S.home ? (S.homeVol ?? 0) : S.vol);
+const dBass = detentKnob(() => S.bass), dTreble = detentKnob(() => S.treble);
+rotary($('kVol'), {
+  onRotate(d) {
+    setVolKnob(dVol.turn(d));
+    if (S.home) return;
+    if (IS_IOS && !S.volHintIos) { S.volHintIos = true; save(); toast('iPhone ではラジオの音量は本体のボタンで。このつまみはザー・カチッの大きさです', 4500); }
+    else if (!IS_IOS && power && cur === elPlain && playing && !S.volHint) { S.volHint = true; toast('この局は音量つまみが効きません。本体の音量ボタンを使ってください', 4000); }
+  },
+  onRelease() { dVol.release(); },
+});
+// 音質は、Web Audio に通して鳴らしている局だけに効く（「VOL 本体ボタン」の局と HOME では効かない）
+rotary($('kBass'), { onRotate(d) { S.bass = dBass.turn(d); save(); applyTone(); updateKnobs(); }, onRelease() { dBass.release(); } });
+rotary($('kTreble'), { onRotate(d) { S.treble = dTreble.turn(d); save(); applyTone(); updateKnobs(); }, onRelease() { dTreble.release(); } });
+
+let bandDrag = 0;
+rotary($('kBand'), {
+  onRotate(d) {
+    bandDrag += d;
+    if (bandDrag > 30) { bandDrag = 0; if (S.band < 4) setBand(S.band + 1); }
+    if (bandDrag < -30) { bandDrag = 0; if (S.band > 0) setBand(S.band - 1); }
+  },
+  onRelease() { bandDrag = 0; },
+  onTap() { setBand(S.band + 1); },
+});
+
+// ---------- スイッチ類 ----------
+$('swPower').addEventListener('click', () => setPower(!swOn));
+// LIGHT は実機と同じ戻りスイッチ：押している間は下がったまま照明がつき、離して 1 秒でレバーが戻って消える
+// （電源OFFなら押せるが点かない）
+const LIGHT_MS = 1000;
+let lightOn = false, lightTimer = 0;
+const swLight = $('swLight');
+swLight.addEventListener('pointerdown', e => {
+  swLight.setPointerCapture(e.pointerId);   // 指が外へずれても、離したことが分かるように
+  clearTimeout(lightTimer);
+  if (!lightOn) { lightOn = true; click(); updateUI(); }
+});
+const lightRelease = () => {
+  if (!lightOn) return;
+  clearTimeout(lightTimer);
+  lightTimer = setTimeout(() => { lightOn = false; updateUI(); }, LIGHT_MS);
+};
+swLight.addEventListener('pointerup', lightRelease);
+swLight.addEventListener('pointercancel', lightRelease);
+$('swBfo').addEventListener('click', () => { S.bfo = !S.bfo; save(); updateUI(); });
+// 銘板をタップすると英語で「Oh!! It's a SORY.」としゃべる。ゆっくりだと a を「エイ」と読むので、つなげて「Itsa」と書く（イッツァ）
+document.querySelector('.plate').addEventListener('click', () => {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  const v = speechSynthesis.getVoices().find(v => /^en[-_]US/i.test(v.lang)) || speechSynthesis.getVoices().find(v => /^en/i.test(v.lang));
+  // 「Oh!!」は語尾を長く伸ばす（声の高さはふつう）。続けて「Itsa SORY.」はふつうの高さでゆっくり
+  const oh = new SpeechSynthesisUtterance('Ohhhhh!');
+  oh.lang = 'en-US'; oh.rate = .45;
+  const u = new SpeechSynthesisUtterance('Itsa SORY.');
+  u.lang = 'en-US'; u.rate = .7;   // ゆっくり
+  if (v) { oh.voice = v; u.voice = v; }
+  speechSynthesis.speak(oh); speechSynthesis.speak(u);
+});
+// 局名のあたりをタップすると、その局のホームページを開く。前に入れたお気に入りにはアドレスが無いので、鳴らした時に radio-browser から補う
+async function fillHomepage(st) {
+  if (!st || st.hp || !st.id) return;
+  try {
+    const [s] = await apiGet(`/json/stations/byuuid/${st.id}`);
+    if (!s || !s.homepage) return;
+    st.hp = s.homepage;
+    const f = S.favs.find(f => f.id === st.id);
+    if (f && !f.hp) { f.hp = s.homepage; save(); }
+  } catch {}
+}
+$('now').addEventListener('click', () => {
+  const st = playing;
+  if (!power || !st) return;
+  if (!/^https?:\/\//i.test(st.hp || '')) { toast('この局のホームページは分かりません'); return; }
+  window.open(st.hp, '_blank', 'noopener');
+});
+$('swAfc').addEventListener('click', () => { S.afc = !S.afc; save(); updateUI(); toast(S.afc ? 'AUTO：ダイヤルを止めると自動で鳴ります' : 'AUTO OFF：ダイヤルをタップで鳴ります'); });
+$('output').querySelector('.pilot').addEventListener('click', () => {   // 切り替えはランプだけ（SPEAKER の文字は押しても何もしない）
+  const was = S.home, st = playing;
+  S.home = !S.home;
+  save(); click(); updateUI(); updateKnobs();
+  if (!power || !st) return;
+  if (was) stopHome(); else stopAudio();
+  play(st);
+});
+$('speed').addEventListener('click',() => { keepKnob(() => { S.fast = !S.fast; }); save(); updateUI(); });
+$('memory').addEventListener('click', () => {
+  const st = stations[Math.round(pos)];
+  if (!st) return;
+  const i = S.favs.findIndex(f => f.id === st.id);
+  if (i >= 0) { S.favs.splice(i, 1); toast('お気に入りから外しました'); }
+  else { S.favs.push(st); toast('お気に入り（FM）に入れました'); }
+  save(); click();
+  if (S.bands[S.band].type === 'memory') { stations = S.favs.slice(); keepKnob(() => { pos = clamp(Math.round(pos), 0, Math.max(0, stations.length - 1)); }); lastIdx = pos; }
+  updateUI(); dirty = true;
+});
+
+// ---------- 選局リスト（選局窓のどこをタップしても開く） ----------
+function openTuneSheet() { click(); renderTuneSheet(); }
+// 一覧を描く。読み込み中に開いたときは、読み終わったら loadBand からもう一度呼ばれて中身が出る
+function renderTuneSheet() {
+  const b = S.bands[S.band], list = $('tuneList');
+  $('tuneTitle').textContent = `${BANDS[S.band]}　${bandName(S.band)}（${stations.length} 局）`;
+  $('tuneOrder').hidden = b.type === 'memory';
+  $('tuneOrder').textContent = S.order === 'votes' ? '定番 ⇄' : 'いま人気 ⇄';
+  const cur = Math.round(pos);
+  if (!stations.length) {
+    list.innerHTML = `<div class="empty">${loading ? '局を探しています…' : loadError ? '局の一覧を読めませんでした（' + esc(loadError) + '）' : b.type === 'memory' ? 'お気に入りがまだありません（MEMORY で追加）' : '局が見つかりません'}</div>`;
+  } else {
+    list.innerHTML = stations.map((st, i) => `<div class="st${i === cur ? ' cur' : ''}" data-i="${i}"><span class="no">${i + 1}</span><span class="nm">${S.favs.some(f => f.id === st.id) ? '★ ' : ''}${esc(st.name)}</span><span class="meta">${esc([st.cc, st.br ? st.br + 'k' : ''].filter(Boolean).join(' · '))}</span></div>`).join('');
+  }
+  $('tuneSheet').hidden = false;
+  const c = list.querySelector('.cur'); if (c) c.scrollIntoView({ block: 'center' });
+}
+function tuneTo(i) {
+  if (!stations[i]) return;
+  vel = 0; pos = i; lastIdx = i; S.pos[S.band] = i; save();
+  if (!power) setPower(true); else play(stations[i]);
+  updateUI();
+}
+// ---------- SEARCH：選局窓のいちばん下の真ん中。数秒ずつ下の局へ進み、端まで行ったら上へ戻る ----------
+const SEARCH_GIVEUP_MS = 10000;   // これだけ待っても受信できない局は飛ばす
+let searching = false, searchDir = 1, searchTimer = 0, searchX = 0;
+function startSearch() {
+  if (!stations.length) { toast('局がありません'); return; }
+  searching = true; dirty = true;
+  if (!power) setPower(true);
+  updateUI();
+  clearTimeout(searchTimer); searchWait(performance.now());
+}
+// 受信できる（ON AIR になる）まで待ってから SETUP の秒数だけ聞く。つながらない局は早めに飛ばす
+function searchWait(t0) {
+  if (!searching) return;
+  if (status === 'onair') { searchTimer = setTimeout(searchStep, S.searchSec * 1000); return; }   // 受信できてから聞く時間（SETUP で選ぶ）
+  if (status === 'nosignal' || performance.now() - t0 > SEARCH_GIVEUP_MS) { searchTimer = setTimeout(searchStep, 1000); return; }
+  searchTimer = setTimeout(() => searchWait(t0), 250);
+}
+function stopSearch() {
+  if (!searching) return;
+  searching = false; clearTimeout(searchTimer); dragging = false; dirty = true;   // 1局分すべらせている途中でも止める
+  updateUI();
+}
+function searchStep() {
+  if (!searching || !power || stations.length < 2) { stopSearch(); return; }
+  let i = Math.round(pos) + searchDir;
+  if (i < 0 || i > stations.length - 1) { searchDir = -searchDir; i = Math.round(pos) + searchDir; }
+  // ダイヤルを回すように 1局分すべらせてから鳴らす
+  const from = pos, t0 = performance.now(), dur = 4000;   // ゆっくり回して、局と局の間で 2 局が混ざるのを聞かせる
+  dragging = true;
+  const glide = () => {   // 画面が止まっていても進むよう requestAnimationFrame ではなくタイマーで
+    if (!searching) { dragging = false; return; }
+    const k = Math.min(1, (performance.now() - t0) / dur);
+    const a = .1, v = 1 / (1 - a), e = k < a ? v * k * k / (2 * a) : k < 1 - a ? v * (k - a / 2) : 1 - v * (1 - k) * (1 - k) / (2 * a);   // 動き出しと止まりぎわだけなめらかに、あとは一定の速さ
+    pos = from + (i - from) * e; dirty = true;
+    if (power) setNoise(.18);
+    if (k < 1) { searchTimer = setTimeout(glide, 20); return; }
+    dragging = false; tuneTo(i);
+    searchWait(performance.now());
+  };
+  glide();
+}
+document.querySelector('.window').addEventListener('click', e => {
+  const r = dial.getBoundingClientRect();
+  if (e.clientY > r.bottom - 18 && Math.abs(e.clientX - (r.left + searchX)) < 30) {   // SEARCH の文字
+    click(); searching ? stopSearch() : startSearch(); return;
+  }
+  openTuneSheet();
+});
+$('tuneList').addEventListener('click', e => {
+  const r = e.target.closest('.st'); if (!r) return;
+  $('tuneSheet').hidden = true; stopSearch(); tuneTo(+r.dataset.i);
+});
+$('tuneClose').addEventListener('click', () => { $('tuneSheet').hidden = true; });
+// いま人気 ⇄ 定番：今の局は、並べ替えたあとも同じ局のまま（一覧に残っていれば）
+$('tuneOrder').addEventListener('click', async () => {
+  const keep = (playing && stations.some(st => st.id === playing.id) ? playing : stations[Math.round(pos)]) || null;
+  S.order = S.order === 'votes' ? 'clickcount' : 'votes'; save();
+  $('tuneOrder').textContent = S.order === 'votes' ? '定番 ⇄' : 'いま人気 ⇄';
+  $('tuneList').innerHTML = '<div class="empty">並べ替えています…</div>';
+  stations = []; loading = true; dirty = true;   // 並べ替え中にほかから一覧を開いても「探しています」と出す
+  const b = S.bands[S.band], key = b.type + ':' + b.q + ':' + S.order;
+  try { if (!cache[key]) cache[key] = await search(b); } catch {}
+  const i = keep && cache[key] ? cache[key].findIndex(st => st.id === keep.id) : -1;
+  S.pos[S.band] = i >= 0 ? i : 0; save();
+  await loadBand();
+});
+$('tuneSheet').addEventListener('click', e => { if (e.target.id === 'tuneSheet') $('tuneSheet').hidden = true; });
+
+// ---------- SW1〜3 のジャンル割り当て（BAND SELECT の文字をタップで開く） ----------
+// 最初の 3 つは元からの設定。選び替えても戻せるように残す
+const GENRES = ['jazz', 'bossa nova', 'classical', 'chillout', 'ambient', 'easy listening', 'lounge', 'smooth jazz', 'piano', 'swing', 'opera', 'big band', 'baroque'];
+let genrePick = [];
+// ジャンルは radio-browser のタグで、局が増えたり減ったり新しい言葉が出てきたりする。開くたびに局数と今の人気を取り直す（1時間は覚えておく）
+// 人気の方は、局数の多いタグのうち音楽のジャンルらしい英語の言葉だけ（国名・「radio」「news」などは外す）
+const GENRE_WORDS = /\b(rock|pop|jazz|blues|soul|funk|r&b|rnb|hip ?hop|rap|reggae|ska|country|folk|classical|electronic|electro|dance|house|techno|trance|ambient|chill|lounge|metal|punk|indie|alternative|oldies|disco|latin|salsa|samba|tango|bossa|gospel|world|celtic|piano|instrumental|soundtrack|anime|j-?pop|k-?pop|edm|dubstep|drum|bass|hits|top ?40|[0-9]0s|swing|opera|baroque|smooth|easy listening|new age|meditation|relax|acoustic|singer|songwriter|grunge|psychedelic|progressive|hard|garage|lo-?fi|synth|retro|motown|bluegrass|americana|flamenco|cumbia|bachata|merengue|afro|arabic|bollywood|chanson|schlager|enka|city pop|vaporwave|ballad|easy)\b/i;
+let genreStats = null, genreStatsAt = 0, genreTab = 0;
+async function loadGenreStats() {
+  if (genreStats && Date.now() - genreStatsAt < 3600e3) return genreStats;
+  const counts = {};
+  await Promise.all(GENRES.map(async g => {
+    try { const list = await apiGet(`/json/tags/${encodeURIComponent(g)}?hidebroken=true`); counts[g] = (list.find(t => t.name === g) || {}).stationcount || 0; } catch {}
+  }));
+  let popular = [];
+  try {
+    const tags = await apiGet('/json/tags?order=stationcount&reverse=true&hidebroken=true&limit=400');
+    popular = tags.filter(t => /^[a-z0-9 &'\-]+$/.test(t.name) && GENRE_WORDS.test(t.name) && !GENRES.includes(t.name) && !/\b(radio|fm|am|news|talk|station|music)\b$/.test(t.name))
+      .slice(0, 24).map(t => ({ g: t.name, n: t.stationcount }));
+  } catch {}
+  genreStats = { counts, popular }; genreStatsAt = Date.now();
+  return genreStats;
+}
+function renderGenreSheet() {
+  const rows = $('genreRows'), stats = genreStats;
+  const cur = genrePick[genreTab];
+  const chip = (g, n) => `<button class="chip${g === cur ? ' on' : ''}${n != null && n < 30 ? ' few' : ''}" data-g="${esc(g)}">${esc(g)}${n != null ? `<span class="n">${n}</span>` : ''}</button>`;
+  const fixed = GENRES.map(g => chip(g, stats ? stats.counts[g] : null)).join('');
+  const others = [...new Set(genrePick.filter(g => g && !GENRES.includes(g) && !(stats && stats.popular.some(p => p.g === g))))];
+  rows.innerHTML =
+    `<div class="tabs">${[2, 3, 4].map((bi, k) => `<div class="tab${k === genreTab ? ' on' : ''}" data-k="${k}"><b>${BANDS[bi]}</b><small>${esc(genrePick[k] || (TYPES[S.bands[bi].type] || '') + ' ' + (S.bands[bi].q || ''))}</small></div>`).join('')}</div>` +
+    `<div class="ghead">いつものジャンル（数字は今の局数）</div><div class="chips">${fixed}${others.map(g => chip(g, null)).join('')}</div>` +
+    `<div class="ghead" style="margin-top:12px">いま局の多いジャンル</div><div class="chips">${stats ? (stats.popular.length ? stats.popular.map(p => chip(p.g, p.n)).join('') : '<span style="color:#888">取れませんでした</span>') : '<span style="color:#888">読み込み中…</span>'}</div>`;
+}
+function openGenreSheet() {
+  click();
+  genrePick = [2, 3, 4].map(i => S.bands[i].type === 'tag' ? S.bands[i].q : '');
+  genreTab = Math.max(0, [2, 3, 4].indexOf(S.band));
+  renderGenreSheet();
+  $('genreSheet').hidden = false;
+  loadGenreStats().then(() => { if (!$('genreSheet').hidden) renderGenreSheet(); });
+}
+$('genreRows').addEventListener('click', e => {
+  const t = e.target.closest('.tab');
+  if (t) { genreTab = +t.dataset.k; renderGenreSheet(); return; }
+  const c = e.target.closest('.chip');
+  if (c) { genrePick[genreTab] = c.dataset.g; renderGenreSheet(); }
+});
+document.querySelector('#bandPanel .title').addEventListener('click', openGenreSheet);
+$('genreCancel').addEventListener('click', () => { $('genreSheet').hidden = true; });
+$('genreSheet').addEventListener('click', e => { if (e.target.id === 'genreSheet') $('genreSheet').hidden = true; });
+$('genreSave').addEventListener('click', () => {
+  let changed = false;
+  [2, 3, 4].forEach((bi, k) => {
+    const g = genrePick[k], b = S.bands[bi];
+    if (!g || (b.type === 'tag' && b.q === g)) return;
+    S.bands[bi] = { type: 'tag', q: g }; S.pos[bi] = 0;
+    if (bi === S.band) changed = true;
+  });
+  save(); $('genreSheet').hidden = true;
+  if (changed) { loadBand(); updateBandUI(); }
+  updateUI();
+});
+
+// ---------- 設定シート ----------
+function openSheet() {
+  const rows = $('bandRows'); rows.innerHTML = '';
+  S.bands.forEach((b, i) => {
+    const r = document.createElement('div'); r.className = 'brow';
+    if (b.type === 'memory') {
+      r.innerHTML = `<b>${BANDS[i]}</b><span>お気に入り</span><span style="color:#aaa">${S.favs.length} 局（MEMORY で追加）</span>`;
+    } else {
+      r.innerHTML = `<b>${BANDS[i]}</b><select>${Object.entries(TYPES).map(([k, v]) => `<option value="${k}"${k === b.type ? ' selected' : ''}>${v}</option>`).join('')}</select><input type="text" autocomplete="off" autocapitalize="off">`;
+      r.querySelector('input').value = b.q || '';
+    }
+    rows.appendChild(r);
+  });
+  $('searchSec').innerHTML = [5, 10, 15, 20, 30, 60].map(n => `<option value="${n}"${n === S.searchSec ? ' selected' : ''}>1局を、受信してから ${n} 秒聞く</option>`).join('');
+  $('sheet').hidden = false;
+}
+$('btnSet').addEventListener('click', openSheet);
+$('searchSec').addEventListener('change', e => { S.searchSec = +e.target.value; save(); });   // 選んだらすぐ効く（保存ボタンは要らない）
+$('sheetCancel').addEventListener('click', () => { $('sheet').hidden = true; });
+$('sheetSave').addEventListener('click', () => {
+  const rows = [...$('bandRows').children];
+  S.bands = S.bands.map((b, i) => {
+    if (b.type === 'memory') return b;
+    const sel = rows[i].querySelector('select'), inp = rows[i].querySelector('input');
+    const nb = { type: sel.value, q: inp.value.trim() || b.q };
+    if (nb.type !== b.type || nb.q !== b.q) S.pos[i] = 0;
+    return nb;
+  });
+  save(); $('sheet').hidden = true;
+  loadBand(); updateBandUI();
+});
+$('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') $('sheet').hidden = true; });
+
+// ---------- TIME SET ON/OFF：ゼンマイ式タイマー（最大 120 分） ----------
+// ドラムか横のノブを上へなでると巻ける（下へなでると戻る）。巻くと電源が入る（POWER スイッチは動かさない）。ドラムが 0 に戻ったら、POWER スイッチが OFF なら電源が切れる
+const TIMER_MAX = 120, DRUM_STEP = 15;   // 分、ドラムの数字の間隔（分）
+let timerMin = 0, timerTick = 0;
+function timerLeft() { return S.timerEnd ? Math.max(0, (S.timerEnd - Date.now()) / 60000) : 0; }
+function drawTimer() {
+  const m = timerLeft();
+  // 窓の真ん中（行 1 つ分下）に今の分が来るように回す
+  const row = $('drum').firstElementChild.offsetHeight, win = $('drumWin').clientHeight;
+  if (row) $('drum').style.transform = `translateY(${win / 2 - row / 2 - m / DRUM_STEP * row}px)`;
+  $('timerTxt').textContent = m > 0 ? `あと ${Math.ceil(m)} 分で OFF` : '上へなでて巻く（最大2時間）';
+}
+function setTimerMin(m, fromUser) {
+  m = clamp(m, 0, TIMER_MAX);
+  S.timerEnd = m > 0 ? Date.now() + m * 60000 : 0; save();
+  drawTimer();
+}
+setInterval(() => {   // ゼンマイがほどけていく
+  if (!S.timerEnd) return;
+  if (Date.now() >= S.timerEnd) { S.timerEnd = 0; save(); drawTimer(); applyPower(); return; }   // ゼンマイが切れた。POWER スイッチが OFF なら電源が切れる
+  drawTimer();
+}, 1000);
+function windDrag(el) {
+  let y0 = 0, m0 = 0, active = false;
+  el.addEventListener('pointerdown', e => { active = true; y0 = e.clientY; m0 = timerLeft(); el.setPointerCapture(e.pointerId); e.preventDefault(); });
+  el.addEventListener('pointermove', e => {
+    if (!active) return;
+    const row = $('drum').firstElementChild.offsetHeight || 10;
+    setTimerMin(m0 + (y0 - e.clientY) / row * DRUM_STEP, true);   // ドラムの数字 1 行分なでると 15 分
+  });
+  // 指を離したときに電源を入れる／切る（iPhone は指を離したときしか音を出させない）
+  const end = () => { if (!active) return; active = false; applyPower(); };
+  el.addEventListener('pointerup', end); el.addEventListener('pointercancel', end);
+}
+$('drum').innerHTML = Array.from({ length: TIMER_MAX / DRUM_STEP + 1 }, (_, i) => `<div>${i * DRUM_STEP}</div>`).join('');
+windDrag($('drumWin')); windDrag($('wind')); windDrag($('windZone'));   // ドラム・ノブと、枠の外の右（指で狙いやすい）
+if (S.timerEnd && S.timerEnd < Date.now()) { S.timerEnd = 0; save(); }   // 閉じている間に切れる時刻を過ぎた
+drawTimer();
+
+// ---------- アンテナ：頭を押すと飛び出し、上へ伸びてから右へ倒れる（見た目だけ） ----------
+let antStep = 0, antTimers = [];
+$('antHit').addEventListener('click', () => {
+  antTimers.forEach(clearTimeout); antTimers = [];
+  const a = $('antenna').classList, r = $('radio').classList, at = (ms, f) => antTimers.push(setTimeout(f, ms));
+  a.add('press'); setTimeout(() => a.remove('press'), 180);   // ボタンが一瞬沈んで戻る
+  if (!a.contains('ext')) {   // 出す：本体を下げながらロッドをまっすぐ上へ伸ばす → 最後に台座が出る → 右へ倒す
+    r.add('ant-out'); a.add('ext');
+    at(850, () => a.add('base'));
+    at(1200, () => a.add('tilt'));
+  } else {                     // しまう：起こす → 台座を引っ込める → ロッドを縮める
+    a.remove('tilt');
+    at(750, () => a.remove('base'));
+    at(1050, () => a.remove('ext'));
+    at(1850, () => r.remove('ant-out'));
+  }
+});
+
+// ---------- 表示 ----------
+function bandName(i) {
+  const b = S.bands[i];
+  return b.type === 'memory' ? 'MEMORY' : (b.q || '');
+}
+function updateBandUI() {
+  [...$('bands').children].forEach((el, i) => el.querySelector('.led').classList.toggle('on', i === S.band));
+  $('lever').style.transform = `rotate(${BAND_ANGLES[S.band]}deg)`;
+}
+function updateKnobs() {
+  const set = (id, v) => { const k = $(id).querySelector('.knob'), r = knobFromValue(v) + 'deg'; k.style.transform = `rotate(${r})`; k.style.setProperty('--r', r); };
+  set('kVol', S.home ? (S.homeVol ?? 0) : S.vol); set('kBass', S.bass); set('kTreble', S.treble);
+}
+function updateUI() {
+  $('swLight').classList.toggle('off', lightOn);   // off＝レバーが下（押している）
+  $('swBfo').classList.toggle('off', S.bfo);   // 実機どおり、上が OFF・下が ON
+  $('swAfc').classList.toggle('off', !S.afc);
+  $('speed').classList.toggle('fast', S.fast);
+  $('output').classList.toggle('home', S.home);
+  $('lampIn').setAttribute('stop-color', (lightOn || searching) && power ? '#6a4a1c' : '#3e423c');
+  $('lampOut').setAttribute('stop-color', (lightOn || searching) && power ? '#2c1a0a' : '#20221e');
+  const st = stations[Math.round(pos)];
+  const fav = st && S.favs.some(f => f.id === st.id);
+  $('memWin').classList.toggle('on', power && !!fav);
+  updateBandUI();   // バンドのランプも電源OFFでは消す
+  $('memCount').textContent = `お気に入り ${S.favs.length} 局`;
+  updateNow(); dirty = true;
+}
+// いまかかっている曲名（配信に埋め込まれた StreamTitle）を、このサーバの nowplaying.php に読んでもらう。鳴っている間 20 秒ごと
+let nowTitle = { url: '', title: '' }, nowTimer = 0;
+async function pollNowTitle() {
+  clearTimeout(nowTimer);
+  if (PUBLIC_BUILD) return;   // nowplaying.php は Radiopi2 にしか無い
+  const st = playing;
+  if (!power || !st || status !== 'onair' || st.hls || /\.m3u8($|\?)/i.test(st.url)) return;
+  nowTimer = setTimeout(pollNowTitle, 20000);
+  try {
+    const r = await fetch('nowplaying.php?u=' + encodeURIComponent(st.url), { cache: 'no-store' });
+    if (!r.ok) return;
+    const { title } = await r.json();
+    if (playing !== st) return;
+    if (nowTitle.url !== st.url || nowTitle.title !== title) { nowTitle = { url: st.url, title: title || '' }; updateNow(); }
+  } catch {}
+}
+function updateNow() {
+  const el = $('now');
+  if (!power) { el.textContent = ''; return; }
+  const st = playing;
+  const s = { tuning: 'TUNING…', onair: 'ON AIR', nosignal: 'NO SIGNAL', idle: '', off: '' }[status];
+  const np = st && nowTitle.url === st.url && nowTitle.title ? `<span class="np">♪ ${esc(nowTitle.title)}</span><br>` : '';
+  el.innerHTML = st ? `<b style="color:#eee">${esc(st.name)}</b><br>${np}${esc([st.cc, st.codec, st.br ? st.br + 'k' : '', !S.home && !IS_IOS && cur === elPlain ? 'VOL 本体ボタン' : ''].filter(Boolean).join(' · '))}<br><span style="color:${status === 'onair' ? '#6f6' : status === 'nosignal' ? '#f66' : '#fc6'}">${s}</span>` : '';
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function buildStatic() {
+  $('bands').innerHTML = BANDS.map(b => `<div><div class="label small">${b}</div><div class="led"></div></div>`).join('');
+  [...$('bands').children].forEach((el, i) => el.addEventListener('click', () => setBand(i)));
+  // VOLUME の目盛り
+  let t = '';
+  for (let i = 0; i <= 10; i++) {
+    const a = (-135 + i * 27) * Math.PI / 180, r1 = 44, r2 = i % 5 ? 47 : 49;
+    t += `<line x1="${Math.sin(a) * r1}" y1="${-Math.cos(a) * r1}" x2="${Math.sin(a) * r2}" y2="${-Math.cos(a) * r2}" stroke="#ddd" stroke-width="1.6"/>`;
+  }
+  $('volTicks').innerHTML = t;
+  document.querySelectorAll('.tone-ticks').forEach(s => { s.innerHTML = t; }); // TONE も同じ目盛り（実機どおり）
+  // メーターの目盛り（実機写真）：上の弧に 0〜10 の小さな数字を全部、その下に短い目盛り、さらに下に一定の太さの白い帯
+  let m = '';
+  const P = (ang, r) => [50 + Math.sin(ang * Math.PI / 180) * r, 70.5 - Math.cos(ang * Math.PI / 180) * r];
+  for (let i = 0; i <= 10; i++) {
+    const ang = -35 + i * 7, [x1, y1] = P(ang, 56.4), [x2, y2] = P(ang, 59.3), [tx, ty] = P(ang, 64.6);
+    m += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width=".6"/>`;
+    m += `<text x="${tx}" y="${ty + 2.4}" transform="rotate(${ang} ${tx} ${ty})" stroke="none" font-size="6.8">${i}</text>`;   // 数字は放射状に傾ける
+  }
+  // 白い帯：太さは一定（半径 54.1〜55.7）
+  const outer = [], inner = [];
+  for (let k = 0; k <= 24; k++) { const ang = -35 + k * 70 / 24; outer.push(P(ang, 55.7)); inner.push(P(ang, 54.1)); }
+  m += `<path d="M ${outer.map(p => p.join(' ')).join(' L ')} L ${inner.reverse().map(p => p.join(' ')).join(' L ')} Z" stroke="none"/>`;
+  // TUNING の文字の下の弧：上の弧と同心円（針の支点が中心）、左 40% は上側へ太く、右 60% は細い。中央と右端に目盛りのような短い線
+  { const Q = (ang, r) => [50 + Math.sin(ang * Math.PI / 180) * r, 70.5 - Math.cos(ang * Math.PI / 180) * r];
+    const lo = [], hi = [];
+    const angs = []; for (let k = 0; k <= 24; k++) angs.push(-35 + k * 70 / 24);   // 目盛りの 0〜10 と同じ角度まで
+    const cut = -35 + 70 * .4, L = angs.filter(a => a < cut).concat(cut), Rr = [cut].concat(angs.filter(a => a > cut));
+    L.forEach(ang => { lo.push(Q(ang, 38.6)); hi.push(Q(ang, 40.9)); });   // 左 40% は太い
+    Rr.forEach(ang => { lo.push(Q(ang, 38.6)); hi.push(Q(ang, 39.6)); });  // 右 60% は細い
+    m += `<path d="M ${hi.map(p => p.join(' ')).join(' L ')} L ${lo.reverse().map(p => p.join(' ')).join(' L ')} Z" stroke="none"/>`;
+    [0, 34.5].forEach(ang => { const [x1, y1] = Q(ang, 38.6), [x2, y2] = Q(ang, 42.7); m += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke-width=".6"/>`; }); }
+  $('meterTicks').innerHTML = m;
+  // バンドの文字
+  const panel = $('bandPanel');
+  BANDS.forEach((b, i) => {
+    const d = document.createElement('div'); d.className = 'blabel label'; d.textContent = b;
+    const a = BAND_ANGLES[i] * Math.PI / 180, cx = 5.6, cy = 5.09, r = 3.7 + .55 * Math.abs(Math.sin(a)); // 横向きの文字は幅があるので少し外へ
+    // つまみと文字の間の短い線（実機どおり）
+    const tk = document.createElement('div'); tk.className = 'btick';
+    tk.style.left = `${cx + Math.sin(a) * 2.8}em`; tk.style.top = `${cy - Math.cos(a) * 2.8}em`;
+    tk.style.transform = `translate(-50%, -50%) rotate(${BAND_ANGLES[i]}deg)`;
+    panel.appendChild(tk);
+    // 文字は .78em なので、位置はパネルの em に直して置く（そのままだと 0.78 倍ずれる）
+    d.style.left = `calc(${cx + Math.sin(a) * r}em / .78)`; d.style.top = `calc(${cy - Math.cos(a) * r}em / .78)`;
+    d.addEventListener('click', () => setBand(i));
+    panel.appendChild(d);
+  });
+  // 下の目盛り 0〜16
+  $('nums').innerHTML = Array.from({ length: 17 }, (_, i) => `<span>${i}</span>`).join('');
+  $('ver').textContent = APP_VERSION; $('verSheet').textContent = APP_VERSION;
+}
+
+// 選局窓（canvas）
+const dial = $('dial'), dc = dial.getContext('2d');
+function resizeDial() {
+  const r = dial.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  dial.width = Math.round(r.width * dpr); dial.height = Math.round(r.height * dpr);
+  dc.setTransform(dpr, 0, 0, dpr, 0, 0); dirty = true;
+}
+new ResizeObserver(resizeDial).observe(dial);
+new ResizeObserver(() => drawTimer()).observe(document.body);   // ドラムの位置は文字の大きさで変わる
+
+// 局名を欄の幅に収めた文字は覚えておく（長い局名を毎フレーム 1 文字ずつ測り直すと重い）
+const fitCache = new Map();
+function fitName(name, maxW) {
+  const key = name + '|' + Math.round(maxW);
+  let v = fitCache.get(key);
+  if (v === undefined) {
+    if (fitCache.size > 2000) fitCache.clear();
+    v = name;
+    if (dc.measureText(v).width > maxW) {   // 収まる長さを二分探索で
+      let lo = 1, hi = name.length;
+      while (lo < hi) { const m = (lo + hi + 1) >> 1; if (dc.measureText(name.slice(0, m) + '…').width <= maxW) lo = m; else hi = m - 1; }
+      v = name.slice(0, lo) + '…';
+    }
+    fitCache.set(key, v);
+  }
+  return v;
+}
+function drawDial() {
+  const w = dial.clientWidth, h = dial.clientHeight;
+  if (!w || !h) return;
+  const lit = (lightOn || searching) && power;   // サーチ中も照明をつける
+  const g = dc.createLinearGradient(0, 0, 0, h);
+  // 地の色はチューニングメーターと同じ（中央が明るく、上下が暗い）。照明をつけるとメーターと同じ琥珀色に
+  if (lit) { g.addColorStop(0, '#2c1a0a'); g.addColorStop(.5, '#6a4a1c'); g.addColorStop(1, '#2c1a0a'); }
+  else { g.addColorStop(0, '#20221e'); g.addColorStop(.5, '#3e423c'); g.addColorStop(1, '#20221e'); }
+  dc.fillStyle = g; dc.fillRect(0, 0, w, h);
+  // 可動部分の左右の端は黒（実機の写真どおり）
+  dc.font = '600 10px Arial';
+  const edge = Math.max(2, Math.min(w * .045, w * .2 - 12 - dc.measureText('100').width - 2));   // 左の CH 番号（3 桁）が隠れない幅まで
+  dc.fillStyle = '#000'; dc.fillRect(0, 0, edge, h); dc.fillRect(w - edge, 0, edge, h);   // ぼかさず、くっきり黒
+  // 動かない上の見出し行と下の表示行は、以前どおり黒地（照明時は濃い琥珀）
+  const g2 = dc.createLinearGradient(0, 0, 0, h);
+  if (lit) { g2.addColorStop(0, '#1e1004'); g2.addColorStop(.5, '#4a2a0c'); g2.addColorStop(1, '#1e1004'); }
+  else { g2.addColorStop(0, '#060606'); g2.addColorStop(.5, '#121212'); g2.addColorStop(1, '#060606'); }
+  dc.fillStyle = g2; dc.fillRect(0, 0, w, 15); dc.fillRect(0, h - 15, w, 15);
+
+  const ink = lit ? '#ffe2a8' : '#e4e4e4';
+  const head = 15, foot = 15, mid = (head + h - foot) / 2, S_ = (h - head - foot) / 4.6;
+  const colCh = w * .2, colInfo = w * .81;   // 右の kbps 欄が空いて見えないよう、全体を右へ寄せる
+  dc.save();
+  dc.beginPath(); dc.rect(0, head, w, h - head - foot); dc.clip();
+
+  if (stations.length) {
+    const first = Math.max(0, Math.floor(viewPos - 3)), last = Math.min(stations.length - 1, Math.ceil(viewPos + 3));
+    // 文字は欄ごとに画素へのそろえ方が違い、少しずつ動かすと局名と番号・kbps が別々に 1 画素ずれて見える。
+    // 行の高さを画面の画素にそろえて、1 行のものはいつも一緒に動かす
+    // さらに、行ごとに丸めると行によって動く瞬間が違うので、動く量（shift）を 1 回だけ丸めて全部の行に同じだけ足す
+    const dpr = window.devicePixelRatio || 1, px = y => Math.round(y * dpr) / dpr, shift = px(-viewPos * S_);
+    // 細かい目盛り（まとめて 1 回で描く）
+    dc.strokeStyle = ink; dc.lineWidth = 1;
+    dc.beginPath();
+    for (let k = first * 4; k <= last * 4; k++) {
+      const y = px(mid + k / 4 * S_) + shift + .5 / dpr;
+      const len = k % 4 ? 5 : 10;
+      dc.moveTo(colCh - len, y); dc.lineTo(colCh, y);
+      dc.moveTo(colInfo, y); dc.lineTo(colInfo + len * .6, y);
+    }
+    dc.stroke();
+    for (let i = first; i <= last; i++) {
+      const st = stations[i], y = px(mid + i * S_) + shift;
+      dc.fillStyle = ink; dc.textBaseline = 'middle';
+      dc.font = '600 10px Arial'; dc.textAlign = 'right';
+      dc.fillText(String(i + 1), colCh - 12, y);
+      dc.textAlign = 'left';
+      dc.font = 'bold 12px "Helvetica Neue", Arial, sans-serif';
+      dc.fillText(fitName(st.name, colInfo - colCh - 10), colCh + 5, y);
+      dc.font = '600 8.5px Arial'; dc.textAlign = 'left';
+      dc.fillText(st.cc || '--', colInfo + 6, y - 5);
+      dc.fillText(st.br ? String(st.br) : '', colInfo + 6, y + 6);
+    }
+  } else {
+    dc.fillStyle = ink; dc.textAlign = 'center'; dc.textBaseline = 'middle'; dc.font = 'bold 12px Arial';
+    const msg = loading ? 'SEARCHING…' : loadError || (S.bands[S.band].type === 'memory' ? 'NO MEMORY' : 'NO STATION');
+    dc.fillText(msg, w / 2, mid - 12);
+    if (!loading && S.bands[S.band].type === 'memory' && !loadError) {
+      dc.font = '10px sans-serif'; dc.fillText('MEMORY で局を登録', w / 2, mid + 12);
+    }
+  }
+  dc.restore();
+
+  // 縦の仕切り線
+  dc.strokeStyle = ink; dc.globalAlpha = .55; dc.lineWidth = 1;
+  [colCh, colInfo].forEach(x => { dc.beginPath(); dc.moveTo(x + .5, head); dc.lineTo(x + .5, h - foot); dc.stroke(); });
+  dc.globalAlpha = 1;
+  // 上の見出しと下の表示
+  dc.fillStyle = ink; dc.font = 'bold 9px Arial'; dc.textBaseline = 'middle'; dc.textAlign = 'center';
+  dc.fillText('CH', colCh / 2, head / 2 + 1);
+  dc.fillText(BANDS[S.band] + '  ' + bandName(S.band).toUpperCase().slice(0, 18), (colCh + colInfo) / 2, head / 2 + 1);
+  dc.fillText('kbps', (colInfo + w) / 2, head / 2 + 1);
+  dc.beginPath(); dc.moveTo(0, head - .5); dc.lineTo(w, head - .5); dc.moveTo(0, h - foot + .5); dc.lineTo(w, h - foot + .5); dc.stroke();
+  dc.textAlign = 'left';
+  const cnt = stations.length ? `${Math.round(pos) + 1}/${stations.length}` : '';
+  dc.fillText(cnt, 5, h - foot / 2);
+  dc.textAlign = 'right';
+  const stx = { tuning: 'TUNING', onair: 'ON AIR', nosignal: 'NO SIGNAL', idle: 'STANDBY', off: '' }[status];   // 電源 OFF のときは空欄
+  dc.fillText(stx, w - 5, h - foot / 2);
+  // SEARCH：左右の文字の間の真ん中。サーチ中は点滅
+  dc.textAlign = 'center';
+  searchX = w / 2;   // 表示の中央に固定（電源や状態で動かない）
+  if (!searching || Math.floor(performance.now() / 450) % 2 === 0) dc.fillText('SEARCH', searchX, h - foot / 2);
+
+  // 緑の指針
+  dc.save();
+  dc.strokeStyle = '#5cc83c';   // 黒地に映える緑（光らせない）
+  dc.lineWidth = 2;
+  // 実機どおり段差をつける：CH の欄から右は線を局名の文字の下へ下げ、局名を隠さない
+  const low = mid + 5.5;
+  dc.beginPath(); dc.moveTo(0, mid); dc.lineTo(colCh + .5, mid); dc.moveTo(colCh + .5, low); dc.lineTo(w, low); dc.stroke();   // 左は元の高さ、局名と kbps の欄は下げてひと続き（縦の線ではつながない）
+  dc.restore();
+  // ガラスの反射
+  const gl = dc.createLinearGradient(0, 0, w, h);
+  gl.addColorStop(0, 'rgba(255,255,255,.10)'); gl.addColorStop(.4, 'rgba(255,255,255,0)'); gl.addColorStop(1, 'rgba(0,0,0,.12)');
+  dc.fillStyle = gl; dc.fillRect(0, 0, w, h);
+}
+
+// ---------- 毎フレーム ----------
+// 表示用の位置。指の動き（タッチの知らせ）は画面の書き換えと間隔がそろわず、1 コマごとの進みがばらついてぎくしゃく見えるので、
+// 表示は本当の位置をごく短い時間（約 30ms）で追いかけてなめらかにする（viewPos）
+let lastT = performance.now(), needleA = NaN;
+function frame(t) {
+  const dt = Math.min(50, t - lastT); lastT = t;
+  if (!dragging && stations.length) {
+    if (Math.abs(vel) > .0006) {
+      pos += vel * dt;
+      vel *= Math.exp(-dt / 120);
+      if (pos <= 0 || pos >= stations.length - 1) { pos = clamp(pos, 0, stations.length - 1); vel = 0; }
+      if (power) setNoise(.18);
+      onIndexMaybeChanged();
+      dirty = true;
+    } else if (vel !== 0 || Math.abs(pos - Math.round(pos)) > .001) {
+      vel = 0;
+      const target = Math.round(pos);
+      pos += (target - pos) * Math.min(1, dt / 70);
+      if (Math.abs(target - pos) < .002) { pos = target; scheduleSettle(); }
+      dirty = true;
+    } else if (!settleTimer && power) {
+      // 止まっている
+    }
+  }
+  // ノイズは動かしている間だけ。指を置いたまま止めたら、局の音だけにする
+  if ((!dragging || t - lastRotateT > 150) && Math.abs(vel) <= .0006) {
+    const lv = status === 'tuning' ? .1 : status === 'nosignal' ? .22 : 0;
+    setNoise(lv);
+  }
+
+  if (Math.abs(pos - viewPos) > 3) viewPos = pos;   // バンドを替えたときなどは一気に
+  else if (Math.abs(pos - viewPos) > .0004) { viewPos += (pos - viewPos) * (1 - Math.exp(-dt / 30)); dirty = true; }
+  else if (viewPos !== pos) { viewPos = pos; dirty = true; }
+
+  updateBlend();
+  // メーター：局にぴったり合っていて鳴っているほど振れる
+  const close = stations.length ? 1 - Math.min(1, Math.abs(pos - Math.round(pos)) * 2) : 0;
+  let target = 0;
+  if (power) {
+    if (status === 'onair' && playing && stations[Math.round(pos)] && stations[Math.round(pos)].id === playing.id) target = (.55 + .4 * Math.min(1, (playing.br || 128) / 320)) * close;
+    else if (status === 'tuning') target = .15 + Math.random() * .25;
+    else target = .05 * close;
+  }
+  // 電源を入れた瞬間：針をすっと右端まで振り、ゆっくり戻す
+  const kick = t - meterKickT;
+  if (kick < 150) meter = Math.max(meter, kick / 150);
+  else meter += (target - meter) * Math.min(1, dt / (kick < 2200 ? 650 : 160));
+  const na = Math.round((-35 + meter * 70) * 20) / 20;   // 変わったときだけ書き換える
+  if (na !== needleA) { needleA = na; $('needle').setAttribute('transform', `rotate(${na} 50 70.5)`); }
+
+  if (searching) dirty = true;   // SEARCH の点滅
+  if (dirty) {
+    dirty = false;
+    drawDial();
+    $('tuneFace').style.transform = `rotate(${knobAngle()}deg)`;
+  }
+  requestAnimationFrame(frame);
+}
+
+// ---------- 起動 ----------
+buildStatic();
+updateBandUI(); updateKnobs(); updateUI();
+loadBand();
+requestAnimationFrame(frame);
+
+window.addEventListener('load', () => {
+  if ('serviceWorker' in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* 未対応でも本体は動く */ });
+  }
+});
+</script>
+</body>
+</html>
