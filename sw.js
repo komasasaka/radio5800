@@ -1,7 +1,7 @@
 // オフライン用のごく小さなサービスワーカー（4:6メソッドと同じ方式）。
 // 初回アクセス時に本体と画像を保存し、以降はネットワークを試してから保存分にフォールバックする。
 // サーバに届かない時は失敗せず応答待ちになることがあるので、一定時間で見切る。
-const CACHE = 'radio-pwa-v283';
+const CACHE = 'radio-pwa-v284';
 const ASSETS = ['./', 'index.html', 'manifest.json?v=56', 'icon-192.png?v=56', 'icon-512.png?v=56', 'apple-touch-icon.png', 'plate-font.woff2?v3'];
 const NETWORK_TIMEOUT_MS = 3000;
 
@@ -31,7 +31,9 @@ self.addEventListener('fetch', e => {
   if (new URL(e.request.url).origin !== self.location.origin) return;
   // 中継している配信（stream.php）は終わりのない音声なので、受けない・保存しない
   if (new URL(e.request.url).pathname.endsWith('/stream.php')) return;
-  const network = fetch(e.request).then(res => {
+  // ブラウザの HTTP キャッシュを使わず、毎回サーバに新しいか確かめる（GitHub Pages は 10 分キャッシュさせるので、
+  // 更新しても古い版が出続けた。変わっていなければ 304 で済む。v2.84）
+  const network = fetch(e.request, { cache: 'no-cache' }).then(res => {
     if (res.ok) {
       const copy = res.clone();
       caches.open(CACHE).then(c => c.put(e.request, copy));
