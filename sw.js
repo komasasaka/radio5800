@@ -1,7 +1,7 @@
 // オフライン用のごく小さなサービスワーカー（4:6メソッドと同じ方式）。
 // 初回アクセス時に本体と画像を保存し、以降はネットワークを試してから保存分にフォールバックする。
 // サーバに届かない時は失敗せず応答待ちになることがあるので、一定時間で見切る。
-const CACHE = 'radio-pwa-v282';
+const CACHE = 'radio-pwa-v283';
 const ASSETS = ['./', 'index.html', 'manifest.json?v=56', 'icon-192.png?v=56', 'icon-512.png?v=56', 'apple-touch-icon.png', 'plate-font.woff2?v3'];
 const NETWORK_TIMEOUT_MS = 3000;
 
