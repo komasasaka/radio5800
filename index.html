@@ -408,7 +408,8 @@
   }
   .now .np { color: #8fd0ff; display: inline-block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
   .now {
-    position: absolute; left: 1.4em; right: 19.5em; top: 2.1em; font-size: 1em; line-height: 1.35;
+    /* top は中央の選局つまみにかぶらないよう 1 行（1.35em）下げた（v2.70） */
+    position: absolute; left: 1.4em; right: 19.5em; top: 3.45em; font-size: 1em; line-height: 1.35;
     color: #bbb; text-shadow: 0 0 .3em #000; cursor: pointer; z-index: 2;
   }
   /* 一番下の物差し（選局とは連動しない）。クロームの枠の中に黒い帯、白い数字と目盛り */
@@ -444,6 +445,8 @@
   #sheet .btns { display: flex; gap: 10px; margin: 14px 0; }
   #sheet button { flex: 1; font-size: 16px; padding: 10px; border-radius: 8px; border: 1px solid #777; background: #333; color: #fff; }
   #sheet button.primary { background: #d86410; border-color: #ff9a3d; }
+  /* 一番下の初期化。押し間違えないよう、ほかのボタンと離して暗い赤 */
+  #sheet #resetAll { display: block; width: 100%; margin-top: 16px; background: #4a1e1e; border-color: #8a3a3a; color: #f0c8c8; }
   /* 選局リスト（選局窓をタップで開く） */
   #tuneSheet { position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 30; display: flex; align-items: flex-end; justify-content: center; }
   #tuneSheet[hidden] { display: none; }
@@ -567,7 +570,7 @@
       </div>
       <div class="model"><svg viewBox="10 0 80 10"><g stroke="#ddd" stroke-width="1" fill="#ddd"><path d="M13 5H43M57 5H87" fill="none"/><!-- 矢じりは半分だけ：左は下側、右は上側（実機の形） --><path d="M10 4.5l5.5 3v-3z"/><path d="M90 5.5l-5.5-3v3z"/><circle cx="50" cy="5" r="4.3" fill="none"/></g><text x="50" y="7.3" font-size="6.5" font-weight="700" font-family="Arial" text-anchor="middle" fill="#ddd">D</text></svg><span>NET 5BAND RECEIVER<br>WR-5800</span></div>
       <div class="panel bfo">
-        <div class="sw" id="swBfo"><div class="label small">BFO</div><div class="label small" style="font-size:.6em">NOISE</div><div class="slot"><div class="cap"></div></div></div>
+        <div class="sw" id="swBfo"><div class="label small">SQL</div><div class="label small" style="font-size:.6em">ON</div><div class="slot"><div class="cap"></div></div></div>
         <div class="setbtn" id="btnSet"><div class="badge">SET<br>UP</div></div>
         <div class="sw" id="swAfc"><div class="label small">AFC</div><div class="label small" style="font-size:.6em">AUTO</div><div class="slot"><div class="cap"></div></div></div>
       </div>
@@ -622,12 +625,12 @@
     <div class="help">
       <b>POWER</b>：電源（再生／停止）<br>
       <b>アンテナ</b>（左上の銀色の頭）：タップで上へ伸び、最後に台座と接続部が出てから右へ倒れる。もう一度タップでしまう（見た目だけ）<br>
-      <b>大きいダイヤル</b>：回して局を選ぶ。タップでその局を鳴らす。局と局の間では両方の局が混ざって聞こえる（iPhone は真ん中あたりだけ重なる）<br>
+      <b>大きいダイヤル</b>：回して局を選ぶ。AFC が AUTO のときはタップで今の局を鳴らし直す。局と局の間では両方の局が混ざって聞こえる（iPhone は真ん中あたりだけ重なる）<br>
       <b>選局窓</b>：タップで今のバンドの局の一覧。選ぶとその局を鳴らす。右上のボタンで「いま人気」（直近の再生回数の順）と「定番」（いいねの累計の順）を切り替え<br>
       <b>SEARCH</b>（選局窓のいちばん下の真ん中）：タップで、受信できてから決めた秒数（この画面の SEARCH で選ぶ。はじめは 10 秒）ずつ聞いて次の局へ（つながらない局は飛ばす）。端まで行くと逆へ戻る。サーチ中は照明がつき、次の局へは 4 秒かけてゆっくり回る（間で 2 局が混ざる）。もう一度タップかダイヤルを回すと止まる<br>
       <b>BAND SELECT の文字</b>：タップで SW1〜SW3 のジャンルを選ぶ<br>
-      <b>AFC（AUTO）</b>：ON なら、ダイヤルを止めると自動で鳴る<br>
-      <b>BFO（NOISE）</b>：選局中の「ザー」音。実機と同じく下で ON、上で OFF<br>
+      <b>AFC（AUTO）</b>：上（ON）ならダイヤルが局に吸いつく。下（OFF）なら離したところで止まり、局と局の間では両方の音とザー音が混ざって聞こえる。どちらも、いちばん近い局が鳴る<br>
+      <b>SQL（SQUELCH）</b>：上で ON にすると選局中の「ザー」音を消す。下（OFF）ではザー音が鳴る<br>
       <b>TUNING SPEED</b>：タップで回す速さを切り替え<br>
       <b>BAND SELECT</b>：タップか回して FM〜SW3 を切り替え。FM はお気に入り<br>
       <b>TIME SET ON/OFF</b>：ゼンマイ式タイマー（最大 2 時間）。ドラム・右のノブ・枠の外の右側を上へなでて巻くと電源が入り（POWER スイッチは OFF のまま）、ドラムが 0 に戻ると切れる。POWER スイッチが ON なら切れない。下へなでると戻せる<br>
@@ -647,11 +650,12 @@
       どれも大文字・小文字は区別しない。人気の順に並ぶ</div>
       <span id="verSheet"></span>
     </div>
+    <button id="resetAll">初期化（設定とお気に入りを消して最初の状態に戻す）</button>
   </div>
 </div>
 
 <script>
-const APP_VERSION = 'v2.68'; // 変更してサーバに上げるたびに進める
+const APP_VERSION = 'v2.77'; // 変更してサーバに上げるたびに進める
 // 公開版（GitHub Pages）では publish-pages.py が true にする。Radiopi2 が無いので、中継（stream.php）・
 // 家のラジオ（RadioPi）・曲名表示（nowplaying.php）を使わず、https の局だけを素の <audio> で鳴らす
 const PUBLIC_BUILD = true;
@@ -677,7 +681,7 @@ const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 // ---------- 保存（使えない環境でも動くように try で包む） ----------
 function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
 const S = Object.assign({
-  band: 2, pos: {}, afc: true, bfo: true, fast: false,
+  band: 2, pos: {}, afc: true, bfo: false, fast: false,   // bfo＝ザー音を鳴らす。初期値は SQL ON（ザー音なし、ユーザー指定 v2.75）
   vol: 0.7, bass: 0.5, treble: 0.5, bands: DEFAULT_BANDS, favs: [], volHint: false, home: false, searchSec: 10, order: 'clickcount',
 }, loadStore());
 if (PUBLIC_BUILD) S.home = false;
@@ -1090,6 +1094,15 @@ function setBand(i) {
 // ---------- ダイヤルの動き ----------
 // 1局進むのに回す角度。大きいほどゆっくり（SLOW は 1回転で 0.6局、FAST は 1回転で 2.25局）
 function degPerStation() { return S.fast ? 160 : 600; }
+// AFC AUTO のときはダイヤルが局に吸いつく：局の近く（±TUNE_HOLD 局）では止まり、離れると次の局へ寄っていく。
+// 指で回した量は tuneRaw に貯め、表示と選局の位置 pos は吸いつけた値にする。OFF のときは吸いつかず、離したところで止まる（局の間なら両方の音が混ざって聞こえる）
+const TUNE_HOLD = .15;
+let tuneRaw = 0;
+function tuneMagnet(raw) {
+  const n = Math.round(raw), e = raw - n;
+  if (Math.abs(e) <= TUNE_HOLD) return n;
+  return n + Math.sign(e) * (Math.abs(e) - TUNE_HOLD) / (.5 - TUNE_HOLD) * .5;
+}
 
 function onIndexMaybeChanged() {
   const idx = Math.round(pos);
@@ -1109,7 +1122,8 @@ function scheduleSettle(ms = 550) {
   clearTimeout(settleTimer);
   settleTimer = setTimeout(() => {
     const st = stations[Math.round(pos)];
-    if (power && S.afc && st && (!playing || playing.id !== st.id)) play(st);
+    // AFC OFF でも、ダイヤルにいちばん近い局を鳴らす（局の間なら隣の局が混ざる。v2.74、タップで鳴らすのはやめた）
+    if (power && st && (!playing || playing.id !== st.id)) play(st);
   }, ms);
 }
 
@@ -1150,9 +1164,11 @@ function rotary(el, { onRotate, onRelease, onTap }) {
 rotary($('kTune'), {
   onRotate(d) {
     stopSearch();
+    if (!dragging) tuneRaw = pos;   // 回し始め
     dragging = true; vel = 0;
     if (!stations.length) return;
-    pos = clamp(pos + d / degPerStation(), 0, stations.length - 1);
+    tuneRaw = clamp(tuneRaw + d / degPerStation(), 0, stations.length - 1);
+    pos = S.afc ? tuneMagnet(tuneRaw) : tuneRaw;
     if (power) setNoise(.18);
     lastRotateT = performance.now();
     onIndexMaybeChanged();
@@ -1162,7 +1178,7 @@ rotary($('kTune'), {
     stopSearch();
     const st = stations[Math.round(pos)];
     if (!power) setPower(true);
-    else if (st) play(st);
+    else if (S.afc && st) play(st);   // AUTO のときだけ（鳴らし直し）
   },
 });
 
@@ -1269,7 +1285,7 @@ $('now').addEventListener('click', () => {
   if (!/^https?:\/\//i.test(st.hp || '')) { toast('この局のホームページは分かりません'); return; }
   window.open(st.hp, '_blank', 'noopener');
 });
-$('swAfc').addEventListener('click', () => { S.afc = !S.afc; save(); updateUI(); toast(S.afc ? 'AUTO：ダイヤルを止めると自動で鳴ります' : 'AUTO OFF：ダイヤルをタップで鳴ります'); });
+$('swAfc').addEventListener('click', () => { S.afc = !S.afc; save(); updateUI(); toast(S.afc ? 'AUTO：ダイヤルが局に吸いつきます' : 'AUTO OFF：離したところで止まります'); });
 $('output').querySelector('.pilot').addEventListener('click', () => {   // 切り替えはランプだけ（SPEAKER の文字は押しても何もしない）
   const was = S.home, st = playing;
   S.home = !S.home;
@@ -1477,6 +1493,13 @@ $('sheetSave').addEventListener('click', () => {
   loadBand(); updateBandUI();
 });
 $('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') $('sheet').hidden = true; });
+// 初期化：保存している設定とお気に入りを消して読み込み直す（最初に開いたときと同じ状態）
+$('resetAll').addEventListener('click', () => {
+  if (!confirm('設定とお気に入り（MEMORY）をすべて消して、最初の状態に戻しますか？')) return;
+  clearTimeout(saveTimer);   // 待っている保存が消した後に書き戻さないように
+  try { localStorage.removeItem(STORE_KEY); } catch {}
+  location.reload();
+});
 
 // ---------- TIME SET ON/OFF：ゼンマイ式タイマー（最大 120 分） ----------
 // ドラムか横のノブを上へなでると巻ける（下へなでると戻る）。巻くと電源が入る（POWER スイッチは動かさない）。ドラムが 0 に戻ったら、POWER スイッチが OFF なら電源が切れる
@@ -1550,7 +1573,9 @@ function updateKnobs() {
 }
 function updateUI() {
   $('swLight').classList.toggle('off', lightOn);   // off＝レバーが下（押している）
-  $('swBfo').classList.toggle('off', S.bfo);   // 実機どおり、上が OFF・下が ON
+  // 表示は SQL（スケルチ。ユーザー選択 2026-10-21、元は BFO）。上 = SQL ON = ザー音なし。
+  // 保存名 S.bfo は「ザー音を鳴らす」のまま（保存済みの設定を引き継ぐため）なので、S.bfo のとき下（off）
+  $('swBfo').classList.toggle('off', S.bfo);
   $('swAfc').classList.toggle('off', !S.afc);
   $('speed').classList.toggle('fast', S.fast);
   $('output').classList.toggle('home', S.home);
@@ -1585,7 +1610,7 @@ function updateNow() {
   const st = playing;
   const s = { tuning: 'TUNING…', onair: 'ON AIR', nosignal: 'NO SIGNAL', idle: '', off: '' }[status];
   const np = st && nowTitle.url === st.url && nowTitle.title ? `<span class="np">♪ ${esc(nowTitle.title)}</span><br>` : '';
-  el.innerHTML = st ? `<b style="color:#eee">${esc(st.name)}</b><br>${np}${esc([st.cc, st.codec, st.br ? st.br + 'k' : '', !S.home && !IS_IOS && cur === elPlain ? 'VOL 本体ボタン' : ''].filter(Boolean).join(' · '))}<br><span style="color:${status === 'onair' ? '#6f6' : status === 'nosignal' ? '#f66' : '#fc6'}">${s}</span>` : '';
+  el.innerHTML = st ? `<b style="color:#eee">${esc(st.name)}</b><br>${np}${esc([st.cc, st.codec, st.br ? st.br + 'k' : ''].filter(Boolean).join(' · '))}<br><span style="color:${status === 'onair' ? '#6f6' : status === 'nosignal' ? '#f66' : '#fc6'}">${s}</span>` : '';
 }
 function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 
@@ -1781,9 +1806,11 @@ function frame(t) {
       if (power) setNoise(.18);
       onIndexMaybeChanged();
       dirty = true;
-    } else if (vel !== 0 || Math.abs(pos - Math.round(pos)) > .001) {
+    } else if (vel !== 0 && !S.afc) {
+      vel = 0;   // AFC OFF：惰性が尽きたところで止める（局に寄せない）
+    } else if (S.afc && (vel !== 0 || Math.abs(pos - Math.round(pos)) > .001)) {
       vel = 0;
-      const target = Math.round(pos);
+      const target = Math.round(pos);   // AFC AUTO：いちばん近い局へ寄せる
       pos += (target - pos) * Math.min(1, dt / 70);
       if (Math.abs(target - pos) < .002) { pos = target; scheduleSettle(); }
       dirty = true;
@@ -1791,10 +1818,11 @@ function frame(t) {
       // 止まっている
     }
   }
-  // ノイズは動かしている間だけ。指を置いたまま止めたら、局の音だけにする
+  // 止まっているときのザー音：局にぴったりなら無し。AFC OFF で局の間に止めたときは、ずれているほど大きく（真ん中で回しているときと同じ）
   if ((!dragging || t - lastRotateT > 150) && Math.abs(vel) <= .0006) {
-    const lv = status === 'tuning' ? .1 : status === 'nosignal' ? .22 : 0;
-    setNoise(lv);
+    const off = stations.length ? Math.min(1, Math.abs(pos - Math.round(pos)) * 2) : 0;
+    const lv = status === 'tuning' ? Math.max(.1, .18 * off) : status === 'nosignal' ? .22 : .18 * off;
+    setNoise(Math.round(lv * 100) / 100);   // 細かく変えると setTargetAtTime が積み重なるので 0.01 刻み
   }
 
   if (Math.abs(pos - viewPos) > 3) viewPos = pos;   // バンドを替えたときなどは一気に
