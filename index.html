@@ -655,7 +655,7 @@
 </div>
 
 <script>
-const APP_VERSION = 'v2.77'; // 変更してサーバに上げるたびに進める
+const APP_VERSION = 'v2.78'; // 変更してサーバに上げるたびに進める
 // 公開版（GitHub Pages）では publish-pages.py が true にする。Radiopi2 が無いので、中継（stream.php）・
 // 家のラジオ（RadioPi）・曲名表示（nowplaying.php）を使わず、https の局だけを素の <audio> で鳴らす
 const PUBLIC_BUILD = true;
@@ -1285,7 +1285,7 @@ $('now').addEventListener('click', () => {
   if (!/^https?:\/\//i.test(st.hp || '')) { toast('この局のホームページは分かりません'); return; }
   window.open(st.hp, '_blank', 'noopener');
 });
-$('swAfc').addEventListener('click', () => { S.afc = !S.afc; save(); updateUI(); toast(S.afc ? 'AUTO：ダイヤルが局に吸いつきます' : 'AUTO OFF：離したところで止まります'); });
+$('swAfc').addEventListener('click', () => { S.afc = !S.afc; save(); updateUI(); });   // お知らせは出さない（ユーザー要望 v2.78）
 $('output').querySelector('.pilot').addEventListener('click', () => {   // 切り替えはランプだけ（SPEAKER の文字は押しても何もしない）
   const was = S.home, st = playing;
   S.home = !S.home;
