@@ -660,7 +660,7 @@
 </div>
 
 <script>
-const APP_VERSION = 'v2.87'; // 変更してサーバに上げるたびに進める
+const APP_VERSION = 'v2.94'; // 変更してサーバに上げるたびに進める
 // 公開版（GitHub Pages）では publish-pages.py が true にする。Radiopi2 が無いので、中継（stream.php）・
 // 家のラジオ（RadioPi）・曲名表示（nowplaying.php）を使わず、https の局だけを素の <audio> で鳴らす
 const PUBLIC_BUILD = true;
@@ -806,6 +806,34 @@ function click() {
   if (!ac || !clickBuf || !power) return;   // 電源OFFのときは操作音を出さない
   const s = ac.createBufferSource(), g = ac.createGain(); g.gain.value = .5;
   s.buffer = clickBuf; s.connect(g); g.connect(fxGain); s.start();
+}
+// アンテナの音。出すとき：ボタンの「カチッ」と、ロッドが伸びる「プシュー」。しまうとき：「カチッ」と、ロッドが縮む長めの「シューー」
+// 機械の音なので VOLUME・電源に関係なく鳴らす
+function antennaSound(out_ = true) {
+  if (!ac) return;
+  const t0 = ac.currentTime + .01, sr = ac.sampleRate;
+  const noise = sec => { const n = Math.floor(sr * sec), b = ac.createBuffer(1, n, sr), d = b.getChannelData(0); for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1; return b; };
+  const out = ac.createGain(); out.gain.value = .9; out.connect(ac.destination);
+  // カチッ：ごく短い 2 つの打音（押した「カ」と、留め金が外れる「チッ」）
+  [[0, .5], [.028, .8]].forEach(([dt, lv]) => {
+    const s = ac.createBufferSource(); s.buffer = noise(.012);
+    const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 1800;
+    const g = ac.createGain(); g.gain.setValueAtTime(lv, t0 + dt); g.gain.exponentialRampToValueAtTime(.001, t0 + dt + .012);
+    s.connect(hp); hp.connect(g); g.connect(out); s.start(t0 + dt);
+    const o = ac.createOscillator(), og = ac.createGain(); o.frequency.value = 3200 + dt * 20000;   // 金属の小さな響き
+    og.gain.setValueAtTime(lv * .25, t0 + dt); og.gain.exponentialRampToValueAtTime(.001, t0 + dt + .03);
+    o.connect(og); og.connect(out); o.start(t0 + dt); o.stop(t0 + dt + .04);
+  });
+  // 出す：プシュー＝高めのザーが少し下がりながら消えていく（ロッドが伸びきるまで）
+  // しまう：シューー＝押してから 0.6 秒後から、高い音から低い音へ下がりながら長めに続いて消える
+  const ps = t0 + (out_ ? .06 : .6), len = out_ ? .8 : 1.1, hold = out_ ? .15 : .1, lv = out_ ? .35 : .7;   // しまうときは山からすぐ、だんだん小さくフェードアウト
+  const s = ac.createBufferSource(); s.buffer = noise(len + .05);
+  const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = .7;
+  bp.frequency.setValueAtTime(out_ ? 6000 : 7500, ps); bp.frequency.exponentialRampToValueAtTime(out_ ? 2200 : 500, ps + len);   // しまうときは高い音からはっきり低い音へ
+  const g = ac.createGain();
+  g.gain.setValueAtTime(.001, ps); g.gain.exponentialRampToValueAtTime(lv, ps + (out_ ? .03 : .08));
+  g.gain.setValueAtTime(lv, ps + hold); g.gain.exponentialRampToValueAtTime(.001, ps + len);
+  s.connect(bp); bp.connect(g); g.connect(out); s.start(ps); s.stop(ps + len + .05);
 }
 let noiseLv = -1;
 function setNoise(level) {
@@ -1551,10 +1579,12 @@ $('antHit').addEventListener('click', () => {
   a.add('press'); setTimeout(() => a.remove('press'), 180);   // ボタンが一瞬沈んで戻る
   if (!a.contains('ext')) {   // 出す：本体を下げながらロッドをまっすぐ上へ伸ばす → 最後に台座が出る → 右へ倒す
     r.add('ant-out'); a.add('ext');
+    ensureAudio(); antennaSound();   // カチッ、プシュー
     at(850, () => a.add('base'));
     at(1200, () => a.add('tilt'));
   } else {                     // しまう：起こす → 台座を引っ込める → ロッドを縮める
     a.remove('tilt');
+    ensureAudio(); antennaSound(false);   // カチッ、シューー
     at(750, () => a.remove('base'));
     at(1050, () => a.remove('ext'));
     at(1850, () => r.remove('ant-out'));
